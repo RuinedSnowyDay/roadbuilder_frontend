@@ -22,6 +22,12 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
       meta: { requiresGuest: true },
     },
+    {
+      path: '/roadmap/:id',
+      name: 'roadmap',
+      component: () => import('../views/RoadmapView.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 
