@@ -69,3 +69,11 @@ export interface Check {
   object: string;
   checked: boolean;
 }
+
+export interface CreateResourceListResponse {
+  newResourceList: string;
+}
+
+export interface AddNodeResponse {
+  newNode: string;
+}
