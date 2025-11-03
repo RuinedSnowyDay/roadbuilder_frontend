@@ -19,7 +19,10 @@
         </div>
       </div>
       <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
-        <p>This roadmap is empty. Graph visualization will be added in Phase 4!</p>
+        <p>This roadmap is empty. Add nodes to see them visualized!</p>
+      </div>
+      <div v-else class="graph-container">
+        <RoadmapEditor :nodes="nodes" :edges="edges" />
       </div>
     </div>
   </div>
@@ -30,6 +33,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
+import RoadmapEditor from '../components/RoadmapEditor.vue';
 
 const route = useRoute();
 const roadmapStore = useRoadmapStore();
@@ -125,6 +129,10 @@ onMounted(async () => {
   background-color: #f9f9f9;
   border-radius: 8px;
   color: #666;
+}
+
+.graph-container {
+  margin-top: 2rem;
 }
 </style>
 
