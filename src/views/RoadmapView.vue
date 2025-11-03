@@ -18,20 +18,59 @@
           <span class="stat-value">{{ edges.length }}</span>
         </div>
       </div>
-      <div class="toolbar">
-        <button @click="showAddNodeDialog = true" class="add-node-button">
-          + Add Node
-        </button>
-      </div>
-      <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
-        <p>This roadmap is empty. Add nodes to see them visualized!</p>
-      </div>
-      <div v-else class="graph-container">
-        <RoadmapEditor :nodes="nodes" :edges="edges" />
+      <div class="main-content">
+        <div class="side-toolbar">
+          <div class="toolbar-title">Actions</div>
+          <button
+            @click="actionMode = 'add'"
+            :class="['toolbar-button', { active: actionMode === 'add' }]"
+            title="Add Node"
+          >
+            <span class="toolbar-icon">+</span>
+            <span class="toolbar-label">Add Node</span>
+          </button>
+          <button
+            @click="actionMode = 'delete'"
+            :class="['toolbar-button', { active: actionMode === 'delete' }]"
+            title="Delete Node"
+          >
+            <span class="toolbar-icon">🗑️</span>
+            <span class="toolbar-label">Delete</span>
+          </button>
+          <button
+            @click="actionMode = 'select'"
+            :class="['toolbar-button', { active: actionMode === 'select' }]"
+            title="Select Mode"
+          >
+            <span class="toolbar-icon">👆</span>
+            <span class="toolbar-label">Select</span>
+          </button>
+          <div v-if="actionMode === 'delete'" class="toolbar-hint">
+            Click on a node to delete it
+          </div>
+        </div>
+        <div class="graph-area">
+          <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
+            <p>This roadmap is empty. Add nodes to see them visualized!</p>
+          </div>
+          <div v-else class="graph-container">
+            <RoadmapEditor
+              :nodes="nodes"
+              :edges="edges"
+              :delete-mode="actionMode === 'delete'"
+              @node-double-click="handleNodeDoubleClick"
+              @node-click="handleNodeClick"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- Add Node Dialog -->
-      <div v-if="showAddNodeDialog" class="dialog-overlay" @click="showAddNodeDialog = false">
+      <div
+        v-if="showAddNodeDialog"
+        class="dialog-overlay"
+        @click="showAddNodeDialog = false; actionMode = 'select'"
+      >
         <div class="dialog-content" @click.stop>
           <h2>Add New Node</h2>
           <form @submit.prevent="handleAddNode">
@@ -51,7 +90,7 @@
             <div class="dialog-actions">
               <button
                 type="button"
-                @click="showAddNodeDialog = false"
+                @click="showAddNodeDialog = false; actionMode = 'select'"
                 :disabled="addingNode"
                 class="cancel-button"
               >
@@ -64,12 +103,82 @@
           </form>
         </div>
       </div>
+
+      <!-- Edit Node Dialog -->
+      <div
+        v-if="showEditNodeDialog"
+        class="dialog-overlay"
+        @click="showEditNodeDialog = false"
+      >
+        <div class="dialog-content" @click.stop>
+          <h2>Edit Node Title</h2>
+          <form @submit.prevent="handleEditNode">
+            <div class="form-group">
+              <label for="edit-node-title">Node Title *</label>
+              <input
+                id="edit-node-title"
+                v-model="editingNodeTitle"
+                type="text"
+                required
+                placeholder="Enter node title"
+                :disabled="editingNode"
+                autofocus
+              />
+            </div>
+            <div v-if="editNodeError" class="error-message">{{ editNodeError }}</div>
+            <div class="dialog-actions">
+              <button
+                type="button"
+                @click="showEditNodeDialog = false"
+                :disabled="editingNode"
+                class="cancel-button"
+              >
+                Cancel
+              </button>
+              <button type="submit" :disabled="editingNode" class="submit-button">
+                {{ editingNode ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Delete Confirmation Dialog -->
+      <div
+        v-if="showDeleteConfirm"
+        class="dialog-overlay"
+        @click="showDeleteConfirm = false"
+      >
+        <div class="dialog-content" @click.stop>
+          <h2>Delete Node</h2>
+          <p>Are you sure you want to delete the node "{{ deletingNodeTitle }}"?</p>
+          <p class="warning-text">This will also remove all connections to this node.</p>
+          <div class="dialog-actions">
+            <button
+              type="button"
+              @click="showDeleteConfirm = false"
+              :disabled="deletingNode"
+              class="cancel-button"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              @click="handleDeleteNode"
+              :disabled="deletingNode"
+              class="delete-button"
+            >
+              {{ deletingNode ? 'Deleting...' : 'Delete' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
@@ -80,10 +189,25 @@ const roadmapStore = useRoadmapStore();
 const { currentRoadmap, nodes, edges, loadingRoadmap } = storeToRefs(roadmapStore);
 
 const roadmapError = ref<string | null>(null);
+const actionMode = ref<'add' | 'delete' | 'select'>('select');
 const showAddNodeDialog = ref(false);
 const newNodeTitle = ref('');
 const addingNode = ref(false);
 const addNodeError = ref('');
+
+// Edit node dialog
+const showEditNodeDialog = ref(false);
+const editingNodeId = ref<string | null>(null);
+const editingNodeTitle = ref('');
+const originalNodeTitle = ref('');
+const editingNode = ref(false);
+const editNodeError = ref('');
+
+// Delete confirmation
+const showDeleteConfirm = ref(false);
+const deletingNodeId = ref<string | null>(null);
+const deletingNodeTitle = ref('');
+const deletingNode = ref(false);
 
 onMounted(async () => {
   const roadmapId = route.params.id as string;
@@ -112,6 +236,7 @@ async function handleAddNode() {
       // Success - close dialog and reset form
       showAddNodeDialog.value = false;
       newNodeTitle.value = '';
+      actionMode.value = 'select';
     }
   } catch (err) {
     addNodeError.value = err instanceof Error ? err.message : 'Failed to add node';
@@ -119,6 +244,109 @@ async function handleAddNode() {
     addingNode.value = false;
   }
 }
+
+function handleNodeDoubleClick(nodeId: string) {
+  const node = nodes.value.find((n) => n._id === nodeId);
+  if (node) {
+    editingNodeId.value = nodeId;
+    editingNodeTitle.value = node.title;
+    originalNodeTitle.value = node.title;
+    showEditNodeDialog.value = true;
+    editNodeError.value = '';
+  }
+}
+
+function handleNodeClick(nodeId: string) {
+  if (actionMode.value === 'delete') {
+    const node = nodes.value.find((n) => n._id === nodeId);
+    if (node) {
+      deletingNodeId.value = nodeId;
+      deletingNodeTitle.value = node.title;
+      showDeleteConfirm.value = true;
+    }
+  }
+}
+
+async function handleEditNode() {
+  if (!editingNodeTitle.value.trim()) {
+    editNodeError.value = 'Node title is required';
+    return;
+  }
+
+  if (!editingNodeId.value) {
+    return;
+  }
+
+  // Check if title changed
+  if (editingNodeTitle.value.trim() === originalNodeTitle.value) {
+    // No change, just close
+    showEditNodeDialog.value = false;
+    return;
+  }
+
+  editingNode.value = true;
+  editNodeError.value = '';
+
+  try {
+    const error = await roadmapStore.updateNodeTitle(
+      editingNodeId.value,
+      editingNodeTitle.value.trim()
+    );
+
+    if (error) {
+      // Show warning dialog for duplicate title
+      if (error.includes('already exists')) {
+        editNodeError.value = error;
+        // Revert to original title
+        editingNodeTitle.value = originalNodeTitle.value;
+      } else {
+        editNodeError.value = error;
+      }
+    } else {
+      // Success - close dialog
+      showEditNodeDialog.value = false;
+      editingNodeId.value = null;
+      editingNodeTitle.value = '';
+      originalNodeTitle.value = '';
+    }
+  } catch (err) {
+    editNodeError.value = err instanceof Error ? err.message : 'Failed to update node';
+  } finally {
+    editingNode.value = false;
+  }
+}
+
+async function handleDeleteNode() {
+  if (!deletingNodeId.value) {
+    return;
+  }
+
+  deletingNode.value = true;
+
+  try {
+    const error = await roadmapStore.deleteNode(deletingNodeId.value);
+    if (error) {
+      alert(`Failed to delete node: ${error}`);
+    } else {
+      // Success - close dialog and exit delete mode
+      showDeleteConfirm.value = false;
+      deletingNodeId.value = null;
+      deletingNodeTitle.value = '';
+      actionMode.value = 'select';
+    }
+  } catch (err) {
+    alert(`Failed to delete node: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    deletingNode.value = false;
+  }
+}
+
+// Watch action mode to open add dialog
+watch(actionMode, (newMode) => {
+  if (newMode === 'add') {
+    showAddNodeDialog.value = true;
+  }
+});
 </script>
 
 <style scoped>
@@ -200,27 +428,87 @@ async function handleAddNode() {
   color: #666;
 }
 
-.toolbar {
-  margin-bottom: 1.5rem;
+.main-content {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
 }
 
-.add-node-button {
-  padding: 0.75rem 1.5rem;
+.side-toolbar {
+  min-width: 180px;
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  height: fit-content;
+}
+
+.toolbar-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.toolbar-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.toolbar-button:hover {
+  background-color: #f5f5f5;
+  border-color: #4caf50;
+}
+
+.toolbar-button.active {
   background-color: #4caf50;
   color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  font-weight: 500;
+  border-color: #4caf50;
 }
 
-.add-node-button:hover {
+.toolbar-button.active:hover {
   background-color: #45a049;
 }
 
+.toolbar-icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+}
+
+.toolbar-label {
+  flex: 1;
+  text-align: left;
+}
+
+.toolbar-hint {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #856404;
+}
+
+.graph-area {
+  flex: 1;
+}
+
 .graph-container {
-  margin-top: 2rem;
+  margin-top: 0;
 }
 
 /* Dialog Styles */
@@ -328,6 +616,33 @@ async function handleAddNode() {
   background-color: #cccccc;
   cursor: not-allowed;
   color: #666;
+}
+
+.delete-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  background-color: #f44336;
+  color: white;
+}
+
+.delete-button:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.delete-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  color: #666;
+}
+
+.warning-text {
+  color: #f44336;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
 }
 </style>
 

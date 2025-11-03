@@ -10,9 +10,17 @@ import type { Node, Edge } from '../services/types';
 interface Props {
   nodes: Node[];
   edges: Edge[];
+  deleteMode?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  deleteMode: false,
+});
+
+const emit = defineEmits<{
+  nodeDoubleClick: [nodeId: string];
+  nodeClick: [nodeId: string];
+}>();
 
 const networkContainer = ref<HTMLElement | null>(null);
 let network: Network | null = null;
@@ -85,6 +93,22 @@ function initializeNetwork() {
   };
 
   network = new Network(networkContainer.value, data, options);
+
+  // Handle node double-click for editing
+  network.on('doubleClick', (params) => {
+    if (params.nodes.length > 0) {
+      const nodeId = params.nodes[0] as string;
+      emit('nodeDoubleClick', nodeId);
+    }
+  });
+
+  // Handle node click for deletion (when in delete mode)
+  network.on('click', (params) => {
+    if (props.deleteMode && params.nodes.length > 0) {
+      const nodeId = params.nodes[0] as string;
+      emit('nodeClick', nodeId);
+    }
+  });
 }
 
 // Watch for changes in nodes/edges and update network
@@ -97,6 +121,21 @@ watch(
     }
   },
   { deep: true }
+);
+
+// Watch for delete mode changes
+watch(
+  () => props.deleteMode,
+  (deleteMode) => {
+    if (networkContainer.value) {
+      if (deleteMode) {
+        networkContainer.value.style.cursor = 'not-allowed';
+      } else {
+        networkContainer.value.style.cursor = 'default';
+      }
+    }
+  },
+  { immediate: true }
 );
 
 onMounted(() => {
