@@ -7,6 +7,8 @@ import type {
   Edge,
   GraphResponse,
   CreateAssignedObjectResponse,
+  CreateResourceListResponse,
+  AddNodeResponse,
 } from '../services/types';
 import { useAuthStore } from './auth';
 
@@ -175,6 +177,77 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Adds a new node to the current roadmap
+   * @param nodeTitle - Title of the node
+   * @returns Error message or null on success
+   */
+  async function addNode(nodeTitle: string): Promise<string | null> {
+    if (!currentGraphId.value) {
+      return 'No roadmap loaded';
+    }
+
+    const authStore = useAuthStore();
+    if (!authStore.currentUser) {
+      return 'User not authenticated';
+    }
+
+    try {
+      // Step 1: Create a ResourceList for the node's enrichment
+      // This will be used later to store resources for the node
+      const resourceListTitle = `Resources for ${nodeTitle}`;
+      const resourceListResponse = await callConceptAction<CreateResourceListResponse>(
+        'ResourceList',
+        'createResourceList',
+        {
+          owner: authStore.currentUser,
+          listTitle: resourceListTitle,
+        }
+      );
+
+      if (resourceListResponse.error) {
+        return resourceListResponse.error;
+      }
+
+      if (!resourceListResponse.data?.newResourceList) {
+        return 'Failed to create resource list';
+      }
+
+      const enrichmentId = resourceListResponse.data.newResourceList;
+
+      // Step 2: Add the node to the graph
+      const addNodeResponse = await callConceptAction<AddNodeResponse>(
+        'EnrichedDAG',
+        'addNode',
+        {
+          graph: currentGraphId.value,
+          nodeTitle: nodeTitle,
+          enrichment: enrichmentId,
+        }
+      );
+
+      if (addNodeResponse.error) {
+        return addNodeResponse.error;
+      }
+
+      if (!addNodeResponse.data?.newNode) {
+        return 'Failed to create node';
+      }
+
+      // Step 3: Reload nodes and edges to update the graph
+      if (currentRoadmap.value) {
+        const error = await loadRoadmap(currentRoadmap.value._id);
+        if (error) {
+          return error;
+        }
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to add node';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -187,6 +260,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     loadRoadmaps,
     createRoadmap,
     loadRoadmap,
+    addNode,
   };
 });
 
