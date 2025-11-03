@@ -248,6 +248,84 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Updates the title of a node
+   * @param nodeId - ID of the node to update
+   * @param newTitle - New title for the node
+   * @returns Error message or null on success
+   */
+  async function updateNodeTitle(nodeId: string, newTitle: string): Promise<string | null> {
+    if (!currentGraphId.value) {
+      return 'No roadmap loaded';
+    }
+
+    const node = nodes.value.find((n) => n._id === nodeId);
+    if (!node) {
+      return 'Node not found';
+    }
+
+    // Check for duplicate titles
+    const duplicate = nodes.value.find(
+      (n) => n._id !== nodeId && n.title === newTitle.trim()
+    );
+    if (duplicate) {
+      return 'A node with this title already exists';
+    }
+
+    try {
+      const response = await callConceptAction('EnrichedDAG', 'changeNodeTitle', {
+        graph: currentGraphId.value,
+        node: nodeId,
+        newNodeTitle: newTitle.trim(),
+      });
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Reload nodes to update the graph
+      if (currentRoadmap.value) {
+        const error = await loadRoadmap(currentRoadmap.value._id);
+        if (error) {
+          return error;
+        }
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to update node title';
+    }
+  }
+
+  /**
+   * Deletes a node from the roadmap
+   * @param nodeId - ID of the node to delete
+   * @returns Error message or null on success
+   */
+  async function deleteNode(nodeId: string): Promise<string | null> {
+    try {
+      const response = await callConceptAction('EnrichedDAG', 'removeNode', {
+        node: nodeId,
+      });
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Reload nodes and edges to update the graph
+      if (currentRoadmap.value) {
+        const error = await loadRoadmap(currentRoadmap.value._id);
+        if (error) {
+          return error;
+        }
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to delete node';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -261,6 +339,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     createRoadmap,
     loadRoadmap,
     addNode,
+    updateNodeTitle,
+    deleteNode,
   };
 });
 
