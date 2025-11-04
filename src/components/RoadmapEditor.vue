@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import type { Node, Edge } from '../services/types';
@@ -246,6 +246,22 @@ function initializeNetwork() {
 
   network = new Network(networkContainer.value, networkData, options);
 
+  // Mark that initial data is loaded into the network
+  // This ensures isInitialLoad state is properly tracked
+  console.log('Network initialized with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
+
+  // Set initial state tracking immediately after network creation
+  // This prevents the watch from treating the first prop change as "initial load"
+  previousNodes = new Set(props.nodes.map((n) => n._id));
+  previousEdges = new Set(
+    props.edges.map((e) => `${e.source}-${e.target}`)
+  );
+  isInitialLoad = false;
+  console.log('Initial state tracked in initializeNetwork:', {
+    nodes: Array.from(previousNodes),
+    edges: Array.from(previousEdges),
+  });
+
   // Register custom node rendering with progress bar using afterDrawing event
   if (network) {
     network.on('afterDrawing', (ctx: CanvasRenderingContext2D) => {
@@ -259,6 +275,7 @@ function initializeNetwork() {
     physicsStabilized = true;
     // Disable physics after initial stabilization to prevent position changes
     network?.setOptions({ physics: { enabled: false } });
+    console.log('Physics stabilized, network ready for updates');
   });
 
   // Handle node double-click for editing
@@ -308,7 +325,10 @@ let isInitialLoad = true;
 watch(
   () => [props.nodes, props.edges],
   () => {
-    if (!network || !nodesDataSet || !edgesDataSet) return;
+    if (!network || !nodesDataSet || !edgesDataSet) {
+      console.log('Watch: Network or DataSets not ready');
+      return;
+    }
 
     // Disable physics to prevent position changes after initial load
     if (physicsStabilized) {
@@ -321,12 +341,27 @@ watch(
     );
 
     if (isInitialLoad) {
-      // First load - just track state
+      // First load - just track state and ensure network is ready
+      console.log('Watch: Initial load, tracking state', {
+        nodeCount: currentNodes.size,
+        edgeCount: currentEdges.size,
+        networkReady: !!network,
+        dataSetsReady: !!(nodesDataSet && edgesDataSet),
+      });
       previousNodes = currentNodes;
       previousEdges = currentEdges;
       isInitialLoad = false;
+      // Don't return early - allow the network to process initial data
+      // The initial data is already in the DataSets from initializeNetwork
       return;
     }
+
+    console.log('Watch: Processing changes', {
+      previousEdges: Array.from(previousEdges),
+      currentEdges: Array.from(currentEdges),
+      previousNodes: Array.from(previousNodes),
+      currentNodes: Array.from(currentNodes),
+    });
 
     // Find nodes to add
     const nodesToAdd = props.nodes
@@ -348,6 +383,8 @@ watch(
       .filter((e) => !previousEdges.has(`${e.source}-${e.target}`))
       .map((e) => getVisEdge(e));
 
+    console.log('Watch: Edges to add', edgesToAdd);
+
     // Find edges to remove by matching source-target pairs
     const edgesToRemove: string[] = [];
     const currentEdgeKeys = new Set(
@@ -365,6 +402,8 @@ watch(
       });
     }
 
+    console.log('Watch: Edges to remove', edgesToRemove);
+
     // Apply incremental updates to DataSets
     if (nodesToAdd.length > 0) {
       nodesDataSet.add(nodesToAdd);
@@ -376,10 +415,26 @@ watch(
       nodesDataSet.remove(nodesToRemove);
     }
     if (edgesToAdd.length > 0) {
+      console.log('Watch: Adding edges to DataSet', edgesToAdd);
       edgesDataSet.add(edgesToAdd);
+      // Use nextTick to ensure DataSet updates are processed, then force redraw
+      nextTick(() => {
+        if (network) {
+          network.redraw();
+          console.log('Watch: Redraw called after adding edges');
+        }
+      });
     }
     if (edgesToRemove.length > 0) {
+      console.log('Watch: Removing edges from DataSet', edgesToRemove);
       edgesDataSet.remove(edgesToRemove);
+      // Use nextTick to ensure DataSet updates are processed, then force redraw
+      nextTick(() => {
+        if (network) {
+          network.redraw();
+          console.log('Watch: Redraw called after removing edges');
+        }
+      });
     }
 
     // Update previous state
@@ -496,6 +551,12 @@ watch(
 
 onMounted(() => {
   initializeNetwork();
+  // After network is initialized, mark initial load as complete
+  // This ensures the watch can properly track changes
+  nextTick(() => {
+    // The watch will fire on initial props, but we need to ensure isInitialLoad is handled correctly
+    // The watch itself will set isInitialLoad to false on first run
+  });
 });
 
 onBeforeUnmount(() => {
