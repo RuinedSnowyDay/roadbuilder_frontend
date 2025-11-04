@@ -235,12 +235,15 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return 'Failed to create node';
       }
 
-      // Step 3: Reload nodes and edges to update the graph
-      if (currentRoadmap.value) {
-        const error = await loadRoadmap(currentRoadmap.value._id);
-        if (error) {
-          return error;
-        }
+      // Optimistically update the graph - add the new node to local state
+      if (currentGraphId.value) {
+        const newNode: Node = {
+          _id: addNodeResponse.data.newNode,
+          parent: currentGraphId.value,
+          title: nodeTitle.trim(),
+          enrichment: enrichmentId,
+        };
+        nodes.value.push(newNode);
       }
 
       return null; // Success
@@ -284,12 +287,10 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return response.error;
       }
 
-      // Reload nodes to update the graph
-      if (currentRoadmap.value) {
-        const error = await loadRoadmap(currentRoadmap.value._id);
-        if (error) {
-          return error;
-        }
+      // Optimistically update the graph - update node title in local state
+      const node = nodes.value.find((n) => n._id === nodeId);
+      if (node) {
+        node.title = newTitle.trim();
       }
 
       return null; // Success
@@ -313,13 +314,11 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return response.error;
       }
 
-      // Reload nodes and edges to update the graph
-      if (currentRoadmap.value) {
-        const error = await loadRoadmap(currentRoadmap.value._id);
-        if (error) {
-          return error;
-        }
-      }
+      // Optimistically update the graph - remove node and connected edges from local state
+      nodes.value = nodes.value.filter((n) => n._id !== nodeId);
+      edges.value = edges.value.filter(
+        (e) => e.source !== nodeId && e.target !== nodeId
+      );
 
       return null; // Success
     } catch (err) {
@@ -381,13 +380,14 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return 'Failed to create edge';
       }
 
-      // Reload nodes and edges to update the graph
-      if (currentRoadmap.value) {
-        const error = await loadRoadmap(currentRoadmap.value._id);
-        if (error) {
-          return error;
-        }
-      }
+      // Optimistically update the graph - add the new edge to local state
+      const newEdge: Edge = {
+        _id: addEdgeResponse.data.newEdge,
+        source: sourceNodeId,
+        target: targetNodeId,
+        enrichment: enrichmentId,
+      };
+      edges.value.push(newEdge);
 
       return null; // Success
     } catch (err) {

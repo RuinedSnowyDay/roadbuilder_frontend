@@ -38,6 +38,14 @@
             <span class="toolbar-label">Delete</span>
           </button>
           <button
+            @click="actionMode = 'connect'"
+            :class="['toolbar-button', { active: actionMode === 'connect' }]"
+            title="Connect Nodes"
+          >
+            <span class="toolbar-icon">🔗</span>
+            <span class="toolbar-label">Connect</span>
+          </button>
+          <button
             @click="actionMode = 'select'"
             :class="['toolbar-button', { active: actionMode === 'select' }]"
             title="Select Mode"
@@ -47,6 +55,12 @@
           </button>
           <div v-if="actionMode === 'delete'" class="toolbar-hint">
             Click on a node to delete it
+          </div>
+          <div v-if="actionMode === 'connect'" class="toolbar-hint">
+            Click a source node, then click a target node to connect them
+          </div>
+          <div v-if="edgeError" class="toolbar-error">
+            {{ edgeError }}
           </div>
         </div>
         <div class="graph-area">
@@ -58,8 +72,10 @@
               :nodes="nodes"
               :edges="edges"
               :delete-mode="actionMode === 'delete'"
+              :connect-mode="actionMode === 'connect'"
               @node-double-click="handleNodeDoubleClick"
               @node-click="handleNodeClick"
+              @edge-created="handleEdgeCreated"
             />
           </div>
         </div>
@@ -189,7 +205,7 @@ const roadmapStore = useRoadmapStore();
 const { currentRoadmap, nodes, edges, loadingRoadmap } = storeToRefs(roadmapStore);
 
 const roadmapError = ref<string | null>(null);
-const actionMode = ref<'add' | 'delete' | 'select'>('select');
+const actionMode = ref<'add' | 'delete' | 'connect' | 'select'>('select');
 const showAddNodeDialog = ref(false);
 const newNodeTitle = ref('');
 const addingNode = ref(false);
@@ -208,6 +224,10 @@ const showDeleteConfirm = ref(false);
 const deletingNodeId = ref<string | null>(null);
 const deletingNodeTitle = ref('');
 const deletingNode = ref(false);
+
+// Edge creation
+const addingEdge = ref(false);
+const edgeError = ref('');
 
 onMounted(async () => {
   const roadmapId = route.params.id as string;
@@ -338,6 +358,40 @@ async function handleDeleteNode() {
     alert(`Failed to delete node: ${err instanceof Error ? err.message : 'Unknown error'}`);
   } finally {
     deletingNode.value = false;
+  }
+}
+
+async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
+  // Prevent creating edge from node to itself
+  if (sourceNodeId === targetNodeId) {
+    edgeError.value = 'Cannot connect a node to itself';
+    setTimeout(() => {
+      edgeError.value = '';
+    }, 3000);
+    return;
+  }
+
+  addingEdge.value = true;
+  edgeError.value = '';
+
+  try {
+    const error = await roadmapStore.addEdge(sourceNodeId, targetNodeId);
+    if (error) {
+      edgeError.value = error;
+      setTimeout(() => {
+        edgeError.value = '';
+      }, 5000);
+    } else {
+      // Success - edge will be added via graph reload
+      actionMode.value = 'select';
+    }
+  } catch (err) {
+    edgeError.value = err instanceof Error ? err.message : 'Failed to create connection';
+    setTimeout(() => {
+      edgeError.value = '';
+    }, 5000);
+  } finally {
+    addingEdge.value = false;
   }
 }
 
@@ -501,6 +555,16 @@ watch(actionMode, (newMode) => {
   border-radius: 4px;
   font-size: 0.85rem;
   color: #856404;
+}
+
+.toolbar-error {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #721c24;
 }
 
 .graph-area {
