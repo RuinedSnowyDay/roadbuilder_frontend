@@ -246,10 +246,6 @@ function initializeNetwork() {
 
   network = new Network(networkContainer.value, networkData, options);
 
-  // Mark that initial data is loaded into the network
-  // This ensures isInitialLoad state is properly tracked
-  console.log('Network initialized with', data.nodes.length, 'nodes and', data.edges.length, 'edges');
-
   // Set initial state tracking immediately after network creation
   // This prevents the watch from treating the first prop change as "initial load"
   previousNodes = new Set(props.nodes.map((n) => n._id));
@@ -257,10 +253,6 @@ function initializeNetwork() {
     props.edges.map((e) => `${e.source}-${e.target}`)
   );
   isInitialLoad = false;
-  console.log('Initial state tracked in initializeNetwork:', {
-    nodes: Array.from(previousNodes),
-    edges: Array.from(previousEdges),
-  });
 
   // Register custom node rendering with progress bar using afterDrawing event
   if (network) {
@@ -275,7 +267,6 @@ function initializeNetwork() {
     physicsStabilized = true;
     // Disable physics after initial stabilization to prevent position changes
     network?.setOptions({ physics: { enabled: false } });
-    console.log('Physics stabilized, network ready for updates');
   });
 
   // Handle node double-click for editing
@@ -291,24 +282,14 @@ function initializeNetwork() {
   network.on('click', (params) => {
     // Only handle clicks if in delete mode and not in connect mode
     if (props.deleteMode && !props.connectMode) {
-      console.log('Click event in delete mode:', {
-        nodes: params.nodes,
-        edges: params.edges,
-        deleteMode: props.deleteMode,
-        connectMode: props.connectMode,
-      });
       if (params.nodes.length > 0) {
         // Node clicked
         const nodeId = params.nodes[0] as string;
-        console.log('Node clicked:', nodeId);
         emit('nodeClick', nodeId);
       } else if (params.edges.length > 0) {
         // Edge clicked
         const edgeId = params.edges[0] as string;
-        console.log('Edge clicked, emitting edgeClick with ID:', edgeId);
         emit('edgeClick', edgeId);
-      } else {
-        console.log('Click detected but no node or edge selected');
       }
     }
   });
@@ -326,7 +307,6 @@ watch(
   () => [props.nodes, props.edges],
   () => {
     if (!network || !nodesDataSet || !edgesDataSet) {
-      console.log('Watch: Network or DataSets not ready');
       return;
     }
 
@@ -342,12 +322,6 @@ watch(
 
     if (isInitialLoad) {
       // First load - just track state and ensure network is ready
-      console.log('Watch: Initial load, tracking state', {
-        nodeCount: currentNodes.size,
-        edgeCount: currentEdges.size,
-        networkReady: !!network,
-        dataSetsReady: !!(nodesDataSet && edgesDataSet),
-      });
       previousNodes = currentNodes;
       previousEdges = currentEdges;
       isInitialLoad = false;
@@ -355,13 +329,6 @@ watch(
       // The initial data is already in the DataSets from initializeNetwork
       return;
     }
-
-    console.log('Watch: Processing changes', {
-      previousEdges: Array.from(previousEdges),
-      currentEdges: Array.from(currentEdges),
-      previousNodes: Array.from(previousNodes),
-      currentNodes: Array.from(currentNodes),
-    });
 
     // Find nodes to add
     const nodesToAdd = props.nodes
@@ -383,8 +350,6 @@ watch(
       .filter((e) => !previousEdges.has(`${e.source}-${e.target}`))
       .map((e) => getVisEdge(e));
 
-    console.log('Watch: Edges to add', edgesToAdd);
-
     // Find edges to remove by matching source-target pairs
     const edgesToRemove: string[] = [];
     const currentEdgeKeys = new Set(
@@ -402,8 +367,6 @@ watch(
       });
     }
 
-    console.log('Watch: Edges to remove', edgesToRemove);
-
     // Apply incremental updates to DataSets
     if (nodesToAdd.length > 0) {
       nodesDataSet.add(nodesToAdd);
@@ -415,24 +378,20 @@ watch(
       nodesDataSet.remove(nodesToRemove);
     }
     if (edgesToAdd.length > 0) {
-      console.log('Watch: Adding edges to DataSet', edgesToAdd);
       edgesDataSet.add(edgesToAdd);
       // Use nextTick to ensure DataSet updates are processed, then force redraw
       nextTick(() => {
         if (network) {
           network.redraw();
-          console.log('Watch: Redraw called after adding edges');
         }
       });
     }
     if (edgesToRemove.length > 0) {
-      console.log('Watch: Removing edges from DataSet', edgesToRemove);
       edgesDataSet.remove(edgesToRemove);
       // Use nextTick to ensure DataSet updates are processed, then force redraw
       nextTick(() => {
         if (network) {
           network.redraw();
-          console.log('Watch: Redraw called after removing edges');
         }
       });
     }
@@ -467,17 +426,11 @@ watch(
 
         // Register delete click handler for both nodes and edges
         network.on('click', (params) => {
-          console.log('Delete mode click handler:', {
-            nodes: params.nodes,
-            edges: params.edges,
-          });
           if (params.nodes.length > 0) {
             const nodeId = params.nodes[0] as string;
-            console.log('Node clicked in delete mode:', nodeId);
             emit('nodeClick', nodeId);
           } else if (params.edges.length > 0) {
             const edgeId = params.edges[0] as string;
-            console.log('Edge clicked in delete mode, emitting edgeClick with ID:', edgeId);
             emit('edgeClick', edgeId);
           }
         });
@@ -508,20 +461,16 @@ watch(
             if (!connectSourceNodeId) {
               // First click - select source node
               connectSourceNodeId = nodeId;
-              console.log('Source node selected:', nodeId);
             } else if (connectSourceNodeId !== nodeId) {
               // Second click on different node - create edge
-              console.log('Creating edge from', connectSourceNodeId, 'to', nodeId);
               emit('edgeCreated', connectSourceNodeId, nodeId);
               connectSourceNodeId = null; // Reset for next connection
             } else {
               // Clicked same node again - cancel
-              console.log('Cancelled - clicked same node');
               connectSourceNodeId = null;
             }
           } else if (connectSourceNodeId) {
             // Clicked empty space - cancel
-            console.log('Cancelled - clicked empty space');
             connectSourceNodeId = null;
           }
         });
