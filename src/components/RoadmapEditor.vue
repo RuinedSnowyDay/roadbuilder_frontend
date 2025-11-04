@@ -45,6 +45,7 @@ function getVisNetworkData() {
   }));
 
   const visEdges = props.edges.map((edge) => ({
+    id: edge._id,
     from: edge.source,
     to: edge.target,
     arrows: 'to',
@@ -66,6 +67,7 @@ function getVisNode(node: Node) {
 // Get vis-network format for a single edge
 function getVisEdge(edge: Edge) {
   return {
+    id: edge._id,
     from: edge.source,
     to: edge.target,
     arrows: 'to',
@@ -164,14 +166,24 @@ function initializeNetwork() {
   network.on('click', (params) => {
     // Only handle clicks if in delete mode and not in connect mode
     if (props.deleteMode && !props.connectMode) {
+      console.log('Click event in delete mode:', {
+        nodes: params.nodes,
+        edges: params.edges,
+        deleteMode: props.deleteMode,
+        connectMode: props.connectMode,
+      });
       if (params.nodes.length > 0) {
         // Node clicked
         const nodeId = params.nodes[0] as string;
+        console.log('Node clicked:', nodeId);
         emit('nodeClick', nodeId);
       } else if (params.edges.length > 0) {
         // Edge clicked
         const edgeId = params.edges[0] as string;
+        console.log('Edge clicked, emitting edgeClick with ID:', edgeId);
         emit('edgeClick', edgeId);
+      } else {
+        console.log('Click detected but no node or edge selected');
       }
     }
   });
@@ -290,11 +302,20 @@ watch(
           },
         });
 
-        // Register delete click handler
+        // Register delete click handler for both nodes and edges
         network.on('click', (params) => {
+          console.log('Delete mode click handler:', {
+            nodes: params.nodes,
+            edges: params.edges,
+          });
           if (params.nodes.length > 0) {
             const nodeId = params.nodes[0] as string;
+            console.log('Node clicked in delete mode:', nodeId);
             emit('nodeClick', nodeId);
+          } else if (params.edges.length > 0) {
+            const edgeId = params.edges[0] as string;
+            console.log('Edge clicked in delete mode, emitting edgeClick with ID:', edgeId);
+            emit('edgeClick', edgeId);
           }
         });
       } else if (connectMode) {

@@ -401,20 +401,31 @@ export const useRoadmapStore = defineStore('roadmap', () => {
    * @returns Error message or null on success
    */
   async function deleteEdge(edgeId: string): Promise<string | null> {
+    console.log('deleteEdge called with edgeId:', edgeId);
+    console.log('Current edges before deletion:', edges.value.map((e) => e._id));
+
     try {
       const response = await callConceptAction('EnrichedDAG', 'removeEdge', {
         edge: edgeId,
       });
 
+      console.log('API response:', response);
+
       if (response.error) {
+        console.log('API error:', response.error);
         return response.error;
       }
 
       // Optimistically update the graph - remove edge from local state
+      const beforeCount = edges.value.length;
       edges.value = edges.value.filter((e) => e._id !== edgeId);
+      const afterCount = edges.value.length;
+      console.log(`Edge removed from local state. Before: ${beforeCount}, After: ${afterCount}`);
+      console.log('Remaining edges:', edges.value.map((e) => e._id));
 
       return null; // Success
     } catch (err) {
+      console.log('Exception in deleteEdge:', err);
       return err instanceof Error ? err.message : 'Failed to delete edge';
     }
   }

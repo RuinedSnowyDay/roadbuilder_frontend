@@ -326,8 +326,13 @@ function handleNodeClick(nodeId: string) {
 }
 
 function handleEdgeClick(edgeId: string) {
+  console.log('handleEdgeClick called with edgeId:', edgeId);
+  console.log('Current edges:', edges.value);
+  console.log('Action mode:', actionMode.value);
+
   if (actionMode.value === 'delete') {
     const edge = edges.value.find((e: Edge) => e._id === edgeId);
+    console.log('Found edge:', edge);
     if (edge) {
       deletingEdgeId.value = edgeId;
       const sourceNode = nodes.value.find((n: Node) => n._id === edge.source);
@@ -335,7 +340,11 @@ function handleEdgeClick(edgeId: string) {
       const sourceTitle = sourceNode?.title || 'Unknown';
       const targetTitle = targetNode?.title || 'Unknown';
       deletingEdgeDescription.value = `${sourceTitle} → ${targetTitle}`;
+      console.log('Showing delete confirmation dialog for edge:', deletingEdgeDescription.value);
       showDeleteEdgeConfirm.value = true;
+    } else {
+      console.log('Edge not found in edges array! Looking for ID:', edgeId);
+      console.log('Available edge IDs:', edges.value.map((e: Edge) => e._id));
     }
   }
 }
