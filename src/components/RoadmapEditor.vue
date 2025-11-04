@@ -37,12 +37,16 @@ let edgesDataSet: DataSet<any> | null = null;
 
 // Transform API data to vis-network format
 function getVisNetworkData() {
-  const visNodes = props.nodes.map((node) => ({
-    id: node._id,
-    label: node.title,
-    shape: 'box',
-    margin: { top: 10, right: 10, bottom: 10, left: 10 },
-  }));
+  const visNodes = props.nodes.map((node) => {
+    const progress = calculateNodeProgress(node._id);
+    return {
+      id: node._id,
+      label: node.title,
+      shape: 'box',
+      margin: { top: 12, right: 10, bottom: 20, left: 10 }, // Increased top and bottom margins to accommodate text and progress bar
+      progress: progress, // Add progress percentage to node data
+    };
+  });
 
   const visEdges = props.edges.map((edge) => ({
     id: edge._id,
@@ -54,13 +58,24 @@ function getVisNetworkData() {
   return { nodes: visNodes, edges: visEdges };
 }
 
+// Calculate progress percentage for a node
+// For now, returns 0% as placeholder (will be updated when resource data is available)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function calculateNodeProgress(_nodeId: string): number {
+  // TODO: Calculate actual progress from checked resources / total resources
+  // For Phase 8, return 0% as placeholder
+  return 0;
+}
+
 // Get vis-network format for a single node
 function getVisNode(node: Node) {
+  const progress = calculateNodeProgress(node._id);
   return {
     id: node._id,
     label: node.title,
     shape: 'box',
     margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    progress: progress, // Add progress percentage to node data
   };
 }
 
@@ -72,6 +87,87 @@ function getVisEdge(edge: Edge) {
     to: edge.target,
     arrows: 'to',
   };
+}
+
+// Helper function to draw rounded rectangle
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+// Draw progress bars on nodes
+function drawProgressBars(ctx: CanvasRenderingContext2D) {
+  if (!network || !nodesDataSet) return;
+
+  // Get all nodes from the network
+  const nodePositions = network.getPositions();
+  const nodes = nodesDataSet.get() as Array<{ id: string; progress?: number; label?: string }>;
+
+  nodes.forEach((node) => {
+    const position = nodePositions[node.id];
+    if (!position) return;
+
+    const progress = node.progress !== undefined ? node.progress : 0;
+
+    // Get actual node bounding box from vis-network
+    if (!network) return;
+    const nodeBoundingBox = network.getBoundingBox(node.id);
+    if (!nodeBoundingBox) return;
+
+    // Calculate actual node dimensions from bounding box
+    const nodeWidth = nodeBoundingBox.right - nodeBoundingBox.left;
+
+    // Progress bar styling
+    const progressBarHeight = 4;
+    const progressBarWidthRatio = 0.6; // Progress bar is 60% of node width (shorter)
+    const progressBarBottomPadding = 14; // Padding from bottom edge (higher from bottom)
+
+    // Calculate progress bar width (centered, shorter than node)
+    const progressBarWidth = nodeWidth * progressBarWidthRatio;
+    const progressBarHorizontalPadding = (nodeWidth - progressBarWidth) / 2; // Center the bar
+
+    // Calculate progress bar position (inside node, above the bottom with padding)
+    const progressBarX = nodeBoundingBox.left + progressBarHorizontalPadding;
+    const progressBarY = nodeBoundingBox.bottom - progressBarHeight - progressBarBottomPadding;
+
+    // Ensure progress bar stays within node bounds
+    if (progressBarWidth <= 0 || progressBarY < nodeBoundingBox.top) return;
+
+    // Save canvas state
+    ctx.save();
+
+    // Draw progress bar background (rounded rectangle)
+    ctx.fillStyle = '#e0e0e0';
+    drawRoundedRect(ctx, progressBarX, progressBarY, progressBarWidth, progressBarHeight, 2);
+    ctx.fill();
+
+    // Draw progress bar fill (rounded rectangle)
+    if (progress > 0) {
+      const progressWidth = (progressBarWidth * progress) / 100;
+      ctx.fillStyle = '#4caf50';
+      drawRoundedRect(ctx, progressBarX, progressBarY, progressWidth, progressBarHeight, 2);
+      ctx.fill();
+    }
+
+    // Restore canvas state
+    ctx.restore();
+  });
 }
 
 function initializeNetwork() {
@@ -106,7 +202,11 @@ function initializeNetwork() {
         size: 14,
         color: '#333',
       },
-      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      margin: { top: 12, right: 10, bottom: 20, left: 10 }, // Increased top and bottom margins to accommodate text and progress bar
+      // Add custom drawing function for progress bar
+      shapeProperties: {
+        useBorderWithImage: false,
+      },
     },
     edges: {
       color: {
@@ -145,6 +245,14 @@ function initializeNetwork() {
   };
 
   network = new Network(networkContainer.value, networkData, options);
+
+  // Register custom node rendering with progress bar using afterDrawing event
+  if (network) {
+    network.on('afterDrawing', (ctx: CanvasRenderingContext2D) => {
+      // This callback is called after drawing, we'll add progress bars on top
+      drawProgressBars(ctx);
+    });
+  }
 
   // Listen for physics stabilization to prevent position changes after initial layout
   network.once('stabilizationIterationsDone', () => {
