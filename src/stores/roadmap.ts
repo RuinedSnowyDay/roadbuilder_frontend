@@ -35,6 +35,9 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   // Resource content cache (resourceId -> content)
   const resourceContentCache = ref<Map<string, string>>(new Map());
 
+  // Resource checks cache (resourceId -> Check)
+  const resourceChecks = ref<Map<string, { _id: string; checked: boolean }>>(new Map());
+
   /**
    * Loads all roadmaps for the current user
    */
@@ -464,6 +467,13 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       }
 
       nodeResources.value = response.data || [];
+
+      // Load checks for all resources in parallel
+      const checkPromises = nodeResources.value.map((resource) =>
+        loadResourceCheck(resource.resource)
+      );
+      await Promise.all(checkPromises);
+
       return null; // Success
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load resources';
@@ -619,6 +629,126 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       // Revert optimistic update on error
       await loadNodeResources(selectedNode.value._id);
       return err instanceof Error ? err.message : 'Failed to reorder resource';
+    }
+  }
+
+  /**
+   * Loads the check status for a resource
+   * @param resourceId - ID of the resource object
+   * @returns Check object or null if not found/error
+   */
+  async function loadResourceCheck(resourceId: string): Promise<{ _id: string; checked: boolean } | null> {
+    // Check cache first
+    if (resourceChecks.value.has(resourceId)) {
+      return resourceChecks.value.get(resourceId) || null;
+    }
+
+    const authStore = useAuthStore();
+    const userId = authStore.currentUser;
+
+    if (!userId) {
+      return null;
+    }
+
+    try {
+      // Get check for this user and resource object
+      const checkResponse = await callConceptQuery<{ _id: string; user: string; object: string; checked: boolean }>(
+        'ObjectChecker',
+        '_getCheck',
+        {
+          user: userId,
+          object: resourceId,
+        }
+      );
+
+      if (checkResponse.error) {
+        return null;
+      }
+
+      // If no check exists, create one
+      if (!checkResponse.data || checkResponse.data.length === 0) {
+        const createResponse = await callConceptAction<{ newCheck: string }>(
+          'ObjectChecker',
+          'createCheck',
+          {
+            user: userId,
+            object: resourceId,
+          }
+        );
+
+        if (createResponse.error) {
+          return null;
+        }
+
+        // New check is created with checked: false
+        const newCheck = {
+          _id: createResponse.data!.newCheck,
+          checked: false,
+        };
+        resourceChecks.value.set(resourceId, newCheck);
+        return newCheck;
+      }
+
+      // Check exists, return it
+      const check = checkResponse.data[0];
+      if (!check) {
+        return null;
+      }
+      const checkData = {
+        _id: check._id,
+        checked: check.checked,
+      };
+      resourceChecks.value.set(resourceId, checkData);
+      return checkData;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Toggles the checked state of a resource
+   * @param resourceId - ID of the resource object
+   * @returns Error message or null on success
+   */
+  async function toggleResourceCompletion(resourceId: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    const userId = authStore.currentUser;
+
+    if (!userId) {
+      return 'User not authenticated';
+    }
+
+    try {
+      // Get or create check
+      const check = await loadResourceCheck(resourceId);
+      if (!check) {
+        return 'Failed to load or create check';
+      }
+
+      const newCheckedState = !check.checked;
+
+      // Update check state
+      const action = newCheckedState ? 'markObject' : 'unmarkObject';
+      const response = await callConceptAction<Record<string, never>>(
+        'ObjectChecker',
+        action,
+        {
+          check: check._id,
+        }
+      );
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Update cache
+      check.checked = newCheckedState;
+      resourceChecks.value.set(resourceId, check);
+
+      // Recalculate progress for all nodes (will be done when nodes are reloaded)
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to toggle resource completion';
     }
   }
 
@@ -834,6 +964,9 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     reorderResource,
     loadResourceContent,
     updateResourceContent,
+    loadResourceCheck,
+    toggleResourceCompletion,
+    resourceChecks,
   };
 });
 

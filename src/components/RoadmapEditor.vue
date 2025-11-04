@@ -6,6 +6,8 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
+import { useRoadmapStore } from '../stores/roadmap';
+import { storeToRefs } from 'pinia';
 import type { Node, Edge } from '../services/types';
 
 interface Props {
@@ -26,6 +28,9 @@ const emit = defineEmits<{
   edgeClick: [edgeId: string];
   edgeCreated: [sourceNodeId: string, targetNodeId: string];
 }>();
+
+const roadmapStore = useRoadmapStore();
+const { nodeResources, resourceChecks } = storeToRefs(roadmapStore);
 
 const networkContainer = ref<HTMLElement | null>(null);
 let network: Network | null = null;
@@ -59,12 +64,32 @@ function getVisNetworkData() {
 }
 
 // Calculate progress percentage for a node
-// For now, returns 0% as placeholder (will be updated when resource data is available)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function calculateNodeProgress(_nodeId: string): number {
-  // TODO: Calculate actual progress from checked resources / total resources
-  // For Phase 8, return 0% as placeholder
-  return 0;
+// Progress = (checked resources / total resources) * 100
+function calculateNodeProgress(nodeId: string): number {
+  // Find the node to get its enrichment (ResourceList ID)
+  const node = props.nodes.find((n) => n._id === nodeId);
+  if (!node) {
+    return 0;
+  }
+
+  // Get all resources for this node's ResourceList
+  const resources = nodeResources.value.filter((r) => r.list === node.enrichment);
+
+  if (resources.length === 0) {
+    return 0; // No resources means 0% progress
+  }
+
+  // Count checked resources
+  let checkedCount = 0;
+  for (const resource of resources) {
+    const check = resourceChecks.value.get(resource.resource);
+    if (check?.checked) {
+      checkedCount++;
+    }
+  }
+
+  // Calculate percentage
+  return Math.round((checkedCount / resources.length) * 100);
 }
 
 // Get vis-network format for a single node
@@ -288,6 +313,27 @@ let physicsStabilized = false;
 let previousNodes: Set<string> = new Set();
 let previousEdges: Set<string> = new Set();
 let isInitialLoad = true;
+
+// Watch for resource checks changes to update progress bars
+watch(
+  () => resourceChecks.value,
+  () => {
+    // When checks change, update node progress and redraw
+    if (nodesDataSet && network) {
+      const nodes = nodesDataSet.get() as Array<{ id: string; progress?: number; label?: string }>;
+      nodes.forEach((node) => {
+        const progress = calculateNodeProgress(node.id);
+        if (node.progress !== progress) {
+          nodesDataSet!.update({ ...node, progress });
+        }
+      });
+      nextTick(() => {
+        network?.redraw();
+      });
+    }
+  },
+  { deep: true }
+);
 
 // Watch for changes in nodes/edges and update network incrementally
 watch(

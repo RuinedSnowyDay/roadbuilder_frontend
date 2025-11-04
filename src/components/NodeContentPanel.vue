@@ -60,11 +60,21 @@
               @dragenter.prevent="handleDragEnter(index)"
               @dragleave="handleDragLeave"
               @drop="handleDrop($event, index)"
+              @click="loadResourceCheckIfNeeded(resource.resource)"
             >
               <div class="resource-drag-handle" title="Drag to reorder">⋮⋮</div>
               <div class="resource-index">{{ index + 1 }}</div>
+              <input
+                type="checkbox"
+                :checked="isResourceChecked(resource.resource)"
+                @change="handleToggleResource(resource.resource)"
+                @click.stop
+                class="resource-checkbox"
+                title="Mark as complete"
+              />
               <div
                 class="resource-content"
+                :class="{ 'completed': isResourceChecked(resource.resource) }"
                 @click="handleResourceClick(resource)"
                 title="Click to edit content"
                 style="cursor: pointer;"
@@ -145,7 +155,7 @@ import MarkdownEditor from './MarkdownEditor.vue';
 import type { IndexedResource } from '../services/types';
 
 const roadmapStore = useRoadmapStore();
-const { selectedNode, nodeResources, loadingResources, error, nodes } = storeToRefs(roadmapStore);
+const { selectedNode, nodeResources, loadingResources, error, nodes, resourceChecks } = storeToRefs(roadmapStore);
 
 const resources = computed(() => nodeResources.value);
 const resourcesError = computed(() => error.value);
@@ -361,14 +371,44 @@ async function handleDrop(event: DragEvent, toIndex: number) {
   }
 }
 
+// Resource check management
+function isResourceChecked(resourceId: string): boolean {
+  const check = resourceChecks.value.get(resourceId);
+  return check?.checked || false;
+}
+
+async function loadResourceCheckIfNeeded(resourceId: string) {
+  if (!resourceChecks.value.has(resourceId)) {
+    await roadmapStore.loadResourceCheck(resourceId);
+  }
+}
+
+async function handleToggleResource(resourceId: string) {
+  // Load check if not cached
+  if (!resourceChecks.value.has(resourceId)) {
+    await roadmapStore.loadResourceCheck(resourceId);
+  }
+
+  // Toggle the check
+  const error = await roadmapStore.toggleResourceCompletion(resourceId);
+  if (error) {
+    alert(`Failed to toggle resource completion: ${error}`);
+  }
+}
+
 // Resource content editing
 async function handleResourceClick(resource: IndexedResource) {
   editingResource.value = resource;
   editingResourceContent.value = 'Loading...';
 
-  // Load content from backend
-  const content = await roadmapStore.loadResourceContent(resource.resource);
+  // Load content and check status in parallel
+  const [content] = await Promise.all([
+    roadmapStore.loadResourceContent(resource.resource),
+    roadmapStore.loadResourceCheck(resource.resource),
+  ]);
+
   editingResourceContent.value = content || '';
+  // Check is cached in store, no need to do anything else
 }
 
 async function handleSaveResourceContent(content: string) {
@@ -595,6 +635,19 @@ function handleCancelEditResource() {
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   padding: 0.5rem 0;
+}
+
+.resource-checkbox {
+  margin-right: 0.5rem;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.resource-content.completed {
+  opacity: 0.6;
+  text-decoration: line-through;
 }
 
 .resource-item {
