@@ -32,11 +32,20 @@
 
         <!-- Resources Section -->
         <div class="resources-section">
-          <h3 class="resources-title">Resources</h3>
+          <div class="resources-header">
+            <h3 class="resources-title">Resources</h3>
+            <button
+              @click="showAddResourceDialog = true"
+              class="add-resource-button"
+              title="Add Resource"
+            >
+              + Add Resource
+            </button>
+          </div>
           <div v-if="loadingResources" class="loading">Loading resources...</div>
           <div v-else-if="resourcesError" class="error">{{ resourcesError }}</div>
           <div v-else-if="resources.length === 0" class="empty-state">
-            <p>No resources yet. Resources will appear here when added.</p>
+            <p>No resources yet. Click "Add Resource" to get started.</p>
           </div>
           <div v-else class="resources-list">
             <div
@@ -48,7 +57,54 @@
               <div class="resource-content">
                 <div class="resource-title">{{ resource.title }}</div>
               </div>
+              <button
+                @click="handleDeleteResource(index)"
+                class="delete-resource-button"
+                title="Delete Resource"
+                :disabled="deletingResourceIndex === index"
+              >
+                {{ deletingResourceIndex === index ? '...' : '×' }}
+              </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Add Resource Dialog -->
+        <div
+          v-if="showAddResourceDialog"
+          class="dialog-overlay-small"
+          @click="showAddResourceDialog = false"
+        >
+          <div class="dialog-content-small" @click.stop>
+            <h3>Add Resource</h3>
+            <form @submit.prevent="handleAddResource">
+              <div class="form-group">
+                <label for="resource-title-input">Resource Title *</label>
+                <input
+                  id="resource-title-input"
+                  v-model="newResourceTitle"
+                  type="text"
+                  required
+                  placeholder="Enter resource title"
+                  :disabled="addingResource"
+                  autofocus
+                />
+              </div>
+              <div v-if="addResourceError" class="error-message">{{ addResourceError }}</div>
+              <div class="dialog-actions">
+                <button
+                  type="button"
+                  @click="handleCancelAddResource"
+                  :disabled="addingResource"
+                  class="cancel-button"
+                >
+                  Cancel
+                </button>
+                <button type="submit" :disabled="addingResource" class="submit-button">
+                  {{ addingResource ? 'Adding...' : 'Add' }}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -70,6 +126,13 @@ const resourcesError = computed(() => error.value);
 const editingTitle = ref('');
 const originalTitle = ref('');
 const hasDuplicateError = ref(false);
+
+// Add Resource state
+const showAddResourceDialog = ref(false);
+const newResourceTitle = ref('');
+const addingResource = ref(false);
+const addResourceError = ref('');
+const deletingResourceIndex = ref<number | null>(null);
 
 // Watch for selectedNode changes to initialize title editing
 watch(selectedNode, (newNode) => {
@@ -147,6 +210,55 @@ function handleTitleCancel() {
   if (!selectedNode.value) return;
   editingTitle.value = originalTitle.value;
   hasDuplicateError.value = false;
+}
+
+async function handleAddResource() {
+  if (!newResourceTitle.value.trim()) {
+    addResourceError.value = 'Resource title is required';
+    return;
+  }
+
+  addingResource.value = true;
+  addResourceError.value = '';
+
+  try {
+    const error = await roadmapStore.addResource(newResourceTitle.value.trim());
+    if (error) {
+      addResourceError.value = error;
+    } else {
+      // Success - close dialog and reset form
+      showAddResourceDialog.value = false;
+      newResourceTitle.value = '';
+      addResourceError.value = '';
+    }
+  } catch (err) {
+    addResourceError.value = err instanceof Error ? err.message : 'Failed to add resource';
+  } finally {
+    addingResource.value = false;
+  }
+}
+
+function handleCancelAddResource() {
+  showAddResourceDialog.value = false;
+  newResourceTitle.value = '';
+  addResourceError.value = '';
+}
+
+async function handleDeleteResource(index: number) {
+  if (confirm(`Are you sure you want to delete "${resources.value[index]?.title}"?`)) {
+    deletingResourceIndex.value = index;
+
+    try {
+      const error = await roadmapStore.removeResource(index);
+      if (error) {
+        alert(`Failed to delete resource: ${error}`);
+      }
+    } catch (err) {
+      alert(`Failed to delete resource: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      deletingResourceIndex.value = null;
+    }
+  }
 }
 </script>
 
@@ -283,11 +395,33 @@ function handleTitleCancel() {
   margin-top: 1rem;
 }
 
+.resources-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
 .resources-title {
-  margin: 0 0 1rem 0;
+  margin: 0;
   font-size: 1.1rem;
   color: #333;
   font-weight: 600;
+}
+
+.add-resource-button {
+  padding: 0.5rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-resource-button:hover {
+  background-color: #45a049;
 }
 
 .loading,
@@ -331,6 +465,10 @@ function handleTitleCancel() {
   background-color: #f9f9f9;
 }
 
+.resource-item:hover .delete-resource-button {
+  opacity: 1;
+}
+
 .resource-index {
   min-width: 28px;
   height: 28px;
@@ -353,6 +491,131 @@ function handleTitleCancel() {
   font-size: 0.95rem;
   color: #333;
   font-weight: 500;
+}
+
+.delete-resource-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #f44336;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  opacity: 0;
+  margin-left: 0.5rem;
+}
+
+.delete-resource-button:hover {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.delete-resource-button:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.dialog-overlay-small {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.dialog-content-small {
+  background-color: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.dialog-content-small h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4caf50;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.cancel-button,
+.submit-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancel-button {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.cancel-button:hover {
+  background-color: #e0e0e0;
+}
+
+.submit-button {
+  background-color: #4caf50;
+  color: white;
+}
+
+.submit-button:hover {
+  background-color: #45a049;
+}
+
+.submit-button:disabled,
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
 

@@ -478,6 +478,84 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     nodeResources.value = [];
   }
 
+  /**
+   * Adds a resource to the selected node
+   * @param resourceTitle - Title for the new resource
+   * @returns Error message or null on success
+   */
+  async function addResource(resourceTitle: string): Promise<string | null> {
+    if (!selectedNode.value) {
+      return 'No node selected';
+    }
+
+    const resourceListId = selectedNode.value.enrichment;
+
+    try {
+      // Resources are Objects, not Checks
+      // We need to create a unique Object ID for each resource
+      // Since ObjectManager.create() might not be exposed in the API,
+      // we'll generate a unique ID that the backend can accept
+      // The backend should handle creating the object if needed
+      const resourceId = `resource-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      const response = await callConceptAction<{ newIndexedResource: string }>(
+        'ResourceList',
+        'appendResource',
+        {
+          resourceList: resourceListId,
+          resource: resourceId,
+          resourceTitle: resourceTitle.trim(),
+        }
+      );
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Reload resources to get the updated list
+      await loadNodeResources(selectedNode.value._id);
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to add resource';
+    }
+  }
+
+  /**
+   * Removes a resource from the selected node by index
+   * @param index - Index of the resource to remove
+   * @returns Error message or null on success
+   */
+  async function removeResource(index: number): Promise<string | null> {
+    if (!selectedNode.value) {
+      return 'No node selected';
+    }
+
+    const resourceListId = selectedNode.value.enrichment;
+
+    try {
+      const response = await callConceptAction<Record<string, never>>(
+        'ResourceList',
+        'deleteResource',
+        {
+          resourceList: resourceListId,
+          index: index,
+        }
+      );
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Reload resources to get the updated list
+      await loadNodeResources(selectedNode.value._id);
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to remove resource';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -500,6 +578,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     loadingResources,
     loadNodeResources,
     clearSelectedNode,
+    addResource,
+    removeResource,
   };
 });
 

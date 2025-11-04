@@ -81,3 +81,11 @@ export interface AddNodeResponse {
 export interface AddEdgeResponse {
   newEdge: string;
 }
+
+export interface AppendResourceResponse {
+  newIndexedResource: string;
+}
+
+export interface CreateCheckResponse {
+  newCheck: string;
+}
