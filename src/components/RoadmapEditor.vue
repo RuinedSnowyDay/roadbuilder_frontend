@@ -269,30 +269,17 @@ function initializeNetwork() {
     network?.setOptions({ physics: { enabled: false } });
   });
 
-  // Handle node double-click for editing
+  // Handle node double-click for opening content modal (only in select mode)
   network.on('doubleClick', (params) => {
-    // Don't handle double-click in connect mode
-    if (!props.connectMode && params.nodes.length > 0) {
+    // Only handle double-click in select mode (not in delete or connect mode)
+    if (!props.connectMode && !props.deleteMode && params.nodes.length > 0) {
       const nodeId = params.nodes[0] as string;
       emit('nodeDoubleClick', nodeId);
     }
   });
 
-  // Handle node and edge clicks for deletion (when in delete mode)
-  network.on('click', (params) => {
-    // Only handle clicks if in delete mode and not in connect mode
-    if (props.deleteMode && !props.connectMode) {
-      if (params.nodes.length > 0) {
-        // Node clicked
-        const nodeId = params.nodes[0] as string;
-        emit('nodeClick', nodeId);
-      } else if (params.edges.length > 0) {
-        // Edge clicked
-        const edgeId = params.edges[0] as string;
-        emit('edgeClick', edgeId);
-      }
-    }
-  });
+  // Note: Initial click handler is set up in the watch for deleteMode/connectMode
+  // This ensures proper mode handling after network creation
 
 }
 
@@ -491,7 +478,7 @@ watch(
           },
         });
 
-        // No click handler needed in select mode (double-click is handled separately)
+        // No click handler needed - double-click is handled separately in initializeNetwork
       }
     }
   },

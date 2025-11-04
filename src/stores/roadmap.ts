@@ -10,6 +10,7 @@ import type {
   CreateResourceListResponse,
   AddNodeResponse,
   AddEdgeResponse,
+  IndexedResource,
 } from '../services/types';
 import { useAuthStore } from './auth';
 
@@ -24,6 +25,11 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   const nodes = ref<Node[]>([]);
   const edges = ref<Edge[]>([]);
   const loadingRoadmap = ref(false);
+
+  // Selected node and its resources
+  const selectedNode = ref<Node | null>(null);
+  const nodeResources = ref<IndexedResource[]>([]);
+  const loadingResources = ref(false);
 
   /**
    * Loads all roadmaps for the current user
@@ -419,6 +425,59 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Loads resources for a selected node
+   * @param nodeId - ID of the node to load resources for
+   * @returns Error message or null on success
+   */
+  async function loadNodeResources(nodeId: string): Promise<string | null> {
+    const node = nodes.value.find((n) => n._id === nodeId);
+    if (!node) {
+      return 'Node not found';
+    }
+
+    selectedNode.value = node;
+    loadingResources.value = true;
+    error.value = null;
+
+    try {
+      // The node's enrichment field contains the ResourceList ID
+      const resourceListId = node.enrichment;
+
+      // Get all resources in the list
+      const response = await callConceptQuery<IndexedResource>(
+        'ResourceList',
+        '_getListResources',
+        {
+          resourceList: resourceListId,
+        }
+      );
+
+      if (response.error) {
+        error.value = response.error;
+        nodeResources.value = [];
+        return response.error;
+      }
+
+      nodeResources.value = response.data || [];
+      return null; // Success
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to load resources';
+      nodeResources.value = [];
+      return err instanceof Error ? err.message : 'Failed to load resources';
+    } finally {
+      loadingResources.value = false;
+    }
+  }
+
+  /**
+   * Clears the selected node and its resources
+   */
+  function clearSelectedNode(): void {
+    selectedNode.value = null;
+    nodeResources.value = [];
+  }
+
   return {
     roadmaps,
     loading,
@@ -436,6 +495,11 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     deleteNode,
     addEdge,
     deleteEdge,
+    selectedNode,
+    nodeResources,
+    loadingResources,
+    loadNodeResources,
+    clearSelectedNode,
   };
 });
 

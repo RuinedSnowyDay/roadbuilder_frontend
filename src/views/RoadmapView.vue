@@ -18,69 +18,73 @@
           <span class="stat-value">{{ edges.length }}</span>
         </div>
       </div>
-      <div class="main-content">
-        <div class="side-toolbar">
-          <div class="toolbar-title">Actions</div>
-          <button
-            @click="actionMode = 'add'"
-            :class="['toolbar-button', { active: actionMode === 'add' }]"
-            title="Add Node"
-          >
-            <span class="toolbar-icon">+</span>
-            <span class="toolbar-label">Add Node</span>
-          </button>
-          <button
-            @click="actionMode = 'delete'"
-            :class="['toolbar-button', { active: actionMode === 'delete' }]"
-            title="Delete Node"
-          >
-            <span class="toolbar-icon">🗑️</span>
-            <span class="toolbar-label">Delete</span>
-          </button>
-          <button
-            @click="actionMode = 'connect'"
-            :class="['toolbar-button', { active: actionMode === 'connect' }]"
-            title="Connect Nodes"
-          >
-            <span class="toolbar-icon">🔗</span>
-            <span class="toolbar-label">Connect</span>
-          </button>
-          <button
-            @click="actionMode = 'select'"
-            :class="['toolbar-button', { active: actionMode === 'select' }]"
-            title="Select Mode"
-          >
-            <span class="toolbar-icon">👆</span>
-            <span class="toolbar-label">Select</span>
-          </button>
-          <div v-if="actionMode === 'delete'" class="toolbar-hint">
-            Click on a node or edge to delete it
-          </div>
-          <div v-if="actionMode === 'connect'" class="toolbar-hint">
-            Click a source node, then click a target node to connect them
-          </div>
-          <div v-if="edgeError" class="toolbar-error">
-            {{ edgeError }}
-          </div>
-        </div>
-        <div class="graph-area">
-          <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
-            <p>This roadmap is empty. Add nodes to see them visualized!</p>
-          </div>
-          <div v-else class="graph-container">
-            <RoadmapEditor
-              :nodes="nodes"
-              :edges="edges"
-              :delete-mode="actionMode === 'delete'"
-              :connect-mode="actionMode === 'connect'"
+          <div class="main-content">
+            <div class="side-toolbar">
+              <div class="toolbar-title">Actions</div>
+              <button
+                @click="actionMode = 'add'"
+                :class="['toolbar-button', { active: actionMode === 'add' }]"
+                title="Add Node"
+              >
+                <span class="toolbar-icon">+</span>
+                <span class="toolbar-label">Add Node</span>
+              </button>
+              <button
+                @click="actionMode = 'delete'"
+                :class="['toolbar-button', { active: actionMode === 'delete' }]"
+                title="Delete Node"
+              >
+                <span class="toolbar-icon">🗑️</span>
+                <span class="toolbar-label">Delete</span>
+              </button>
+              <button
+                @click="actionMode = 'connect'"
+                :class="['toolbar-button', { active: actionMode === 'connect' }]"
+                title="Connect Nodes"
+              >
+                <span class="toolbar-icon">🔗</span>
+                <span class="toolbar-label">Connect</span>
+              </button>
+              <button
+                @click="actionMode = 'select'"
+                :class="['toolbar-button', { active: actionMode === 'select' }]"
+                title="Select Mode"
+              >
+                <span class="toolbar-icon">👆</span>
+                <span class="toolbar-label">Select</span>
+              </button>
+              <div v-if="actionMode === 'delete'" class="toolbar-hint">
+                Click on a node or edge to delete it
+              </div>
+              <div v-if="actionMode === 'connect'" class="toolbar-hint">
+                Click a source node, then click a target node to connect them
+              </div>
+              <div v-if="actionMode === 'select'" class="toolbar-hint">
+                Double-click on a node to view and edit its content
+              </div>
+              <div v-if="edgeError" class="toolbar-error">
+                {{ edgeError }}
+              </div>
+            </div>
+            <div class="graph-area">
+              <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
+                <p>This roadmap is empty. Add nodes to see them visualized!</p>
+              </div>
+              <div v-else class="graph-container">
+                <RoadmapEditor
+                  :nodes="nodes"
+                  :edges="edges"
+                  :delete-mode="actionMode === 'delete'"
+                  :connect-mode="actionMode === 'connect'"
               @node-double-click="handleNodeDoubleClick"
               @node-click="handleNodeClick"
               @edge-click="handleEdgeClick"
               @edge-created="handleEdgeCreated"
-            />
+                />
+              </div>
+            </div>
+            <NodeContentPanel />
           </div>
-        </div>
-      </div>
 
       <!-- Add Node Dialog -->
       <div
@@ -230,6 +234,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
 import RoadmapEditor from '../components/RoadmapEditor.vue';
+import NodeContentPanel from '../components/NodeContentPanel.vue';
 import type { Node, Edge } from '../services/types';
 
 const route = useRoute();
@@ -304,14 +309,8 @@ async function handleAddNode() {
 }
 
 function handleNodeDoubleClick(nodeId: string) {
-  const node = nodes.value.find((n) => n._id === nodeId);
-  if (node) {
-    editingNodeId.value = nodeId;
-    editingNodeTitle.value = node.title;
-    originalNodeTitle.value = node.title;
-    showEditNodeDialog.value = true;
-    editNodeError.value = '';
-  }
+  // Load resources and open the node content modal
+  roadmapStore.loadNodeResources(nodeId);
 }
 
 function handleNodeClick(nodeId: string) {
@@ -564,6 +563,7 @@ watch(actionMode, (newMode) => {
   display: flex;
   gap: 1.5rem;
   margin-top: 1.5rem;
+  align-items: flex-start;
 }
 
 .side-toolbar {
@@ -647,6 +647,7 @@ watch(actionMode, (newMode) => {
 
 .graph-area {
   flex: 1;
+  min-width: 0; /* Allows flex item to shrink below content size */
 }
 
 .graph-container {
