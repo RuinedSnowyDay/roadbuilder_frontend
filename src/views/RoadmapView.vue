@@ -53,6 +53,9 @@
                 <span class="toolbar-icon">👆</span>
                 <span class="toolbar-label">Select</span>
               </button>
+              <div v-if="actionMode === 'add'" class="toolbar-hint">
+                Click on the graph to add a new node at that position
+              </div>
               <div v-if="actionMode === 'delete'" class="toolbar-hint">
                 Click on a node or edge to delete it
               </div>
@@ -67,63 +70,27 @@
               </div>
             </div>
             <div class="graph-area">
-              <div v-if="nodes.length === 0 && edges.length === 0" class="empty-message">
-                <p>This roadmap is empty. Add nodes to see them visualized!</p>
+              <div v-if="nodes.length === 0 && edges.length === 0 && actionMode !== 'add'" class="empty-message">
+                <p>This roadmap is empty. Click "Add Node" and then click on the graph to add nodes!</p>
               </div>
-              <div v-else class="graph-container">
+              <div class="graph-container">
                 <RoadmapEditor
                   :nodes="nodes"
                   :edges="edges"
                   :delete-mode="actionMode === 'delete'"
                   :connect-mode="actionMode === 'connect'"
-              @node-double-click="handleNodeDoubleClick"
-              @node-click="handleNodeClick"
-              @edge-click="handleEdgeClick"
-              @edge-created="handleEdgeCreated"
+                  :add-node-mode="actionMode === 'add'"
+                  @node-double-click="handleNodeDoubleClick"
+                  @node-click="handleNodeClick"
+                  @edge-click="handleEdgeClick"
+                  @edge-created="handleEdgeCreated"
+                  @canvas-click="handleCanvasClick"
                 />
               </div>
             </div>
             <NodeContentPanel />
           </div>
 
-      <!-- Add Node Dialog -->
-      <div
-        v-if="showAddNodeDialog"
-        class="dialog-overlay"
-        @click="showAddNodeDialog = false; actionMode = 'select'"
-      >
-        <div class="dialog-content" @click.stop>
-          <h2>Add New Node</h2>
-          <form @submit.prevent="handleAddNode">
-            <div class="form-group">
-              <label for="node-title">Node Title *</label>
-              <input
-                id="node-title"
-                v-model="newNodeTitle"
-                type="text"
-                required
-                placeholder="Enter node title"
-                :disabled="addingNode"
-                autofocus
-              />
-            </div>
-            <div v-if="addNodeError" class="error-message">{{ addNodeError }}</div>
-            <div class="dialog-actions">
-              <button
-                type="button"
-                @click="showAddNodeDialog = false; actionMode = 'select'"
-                :disabled="addingNode"
-                class="cancel-button"
-              >
-                Cancel
-              </button>
-              <button type="submit" :disabled="addingNode" class="submit-button">
-                {{ addingNode ? 'Adding...' : 'Add Node' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
 
       <!-- Edit Node Dialog -->
       <div
@@ -229,7 +196,7 @@
     </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
@@ -243,7 +210,6 @@ const { currentRoadmap, nodes, edges, loadingRoadmap } = storeToRefs(roadmapStor
 
 const roadmapError = ref<string | null>(null);
 const actionMode = ref<'add' | 'delete' | 'connect' | 'select'>('select');
-const showAddNodeDialog = ref(false);
 const newNodeTitle = ref('');
 const addingNode = ref(false);
 const addNodeError = ref('');
@@ -282,9 +248,8 @@ onMounted(async () => {
   }
 });
 
-async function handleAddNode() {
-  if (!newNodeTitle.value.trim()) {
-    addNodeError.value = 'Node title is required';
+async function handleAddNode(title: string, x?: number, y?: number) {
+  if (!title.trim()) {
     return;
   }
 
@@ -292,19 +257,37 @@ async function handleAddNode() {
   addNodeError.value = '';
 
   try {
-    const error = await roadmapStore.addNode(newNodeTitle.value.trim());
+    const error = await roadmapStore.addNode(title.trim(), x, y);
     if (error) {
       addNodeError.value = error;
+      alert(`Failed to add node: ${error}`);
     } else {
-      // Success - close dialog and reset form
-      showAddNodeDialog.value = false;
+      // Success - reset form and exit add mode
       newNodeTitle.value = '';
       actionMode.value = 'select';
     }
   } catch (err) {
     addNodeError.value = err instanceof Error ? err.message : 'Failed to add node';
+    alert(`Failed to add node: ${addNodeError.value}`);
   } finally {
     addingNode.value = false;
+  }
+}
+
+function handleCanvasClick(position: { x: number; y: number }) {
+  console.log('Canvas click received:', position);
+  if (actionMode.value !== 'add') {
+    console.log('Not in add mode, ignoring');
+    return;
+  }
+
+  // Prompt for node title
+  const title = prompt('Enter node title:');
+  console.log('User entered title:', title);
+  if (title && title.trim()) {
+    handleAddNode(title.trim(), position.x, position.y);
+  } else {
+    console.log('No title provided, cancelling');
   }
 }
 
@@ -472,12 +455,6 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
   }
 }
 
-// Watch action mode to open add dialog
-watch(actionMode, (newMode) => {
-  if (newMode === 'add') {
-    showAddNodeDialog.value = true;
-  }
-});
 </script>
 
 <style scoped>

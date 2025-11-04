@@ -15,11 +15,13 @@ interface Props {
   edges: Edge[];
   deleteMode?: boolean;
   connectMode?: boolean;
+  addNodeMode?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   deleteMode: false,
   connectMode: false,
+  addNodeMode: false,
 });
 
 const emit = defineEmits<{
@@ -27,10 +29,11 @@ const emit = defineEmits<{
   nodeClick: [nodeId: string];
   edgeClick: [edgeId: string];
   edgeCreated: [sourceNodeId: string, targetNodeId: string];
+  canvasClick: [position: { x: number; y: number }];
 }>();
 
 const roadmapStore = useRoadmapStore();
-const { nodeResources, resourceChecks } = storeToRefs(roadmapStore);
+const { resourceChecks, allNodeResources } = storeToRefs(roadmapStore);
 
 const networkContainer = ref<HTMLElement | null>(null);
 let network: Network | null = null;
@@ -42,16 +45,7 @@ let edgesDataSet: DataSet<any> | null = null;
 
 // Transform API data to vis-network format
 function getVisNetworkData() {
-  const visNodes = props.nodes.map((node) => {
-    const progress = calculateNodeProgress(node._id);
-    return {
-      id: node._id,
-      label: node.title,
-      shape: 'box',
-      margin: { top: 12, right: 10, bottom: 20, left: 10 }, // Increased top and bottom margins to accommodate text and progress bar
-      progress: progress, // Add progress percentage to node data
-    };
-  });
+  const visNodes = props.nodes.map((node) => getVisNode(node));
 
   const visEdges = props.edges.map((edge) => ({
     id: edge._id,
@@ -72,8 +66,8 @@ function calculateNodeProgress(nodeId: string): number {
     return 0;
   }
 
-  // Get all resources for this node's ResourceList
-  const resources = nodeResources.value.filter((r) => r.list === node.enrichment);
+  // Get all resources for this node's ResourceList from the cache
+  const resources = allNodeResources.value.get(node.enrichment) || [];
 
   if (resources.length === 0) {
     return 0; // No resources means 0% progress
@@ -93,15 +87,33 @@ function calculateNodeProgress(nodeId: string): number {
 }
 
 // Get vis-network format for a single node
-function getVisNode(node: Node) {
+function getVisNode(node: Node & { x?: number; y?: number }) {
   const progress = calculateNodeProgress(node._id);
-  return {
+  const visNode: {
+    id: string;
+    label: string;
+    shape: string;
+    margin: { top: number; right: number; bottom: number; left: number };
+    progress: number;
+    x?: number;
+    y?: number;
+    fixed?: { x: boolean; y: boolean };
+  } = {
     id: node._id,
     label: node.title,
     shape: 'box',
-    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    margin: { top: 12, right: 10, bottom: 20, left: 10 },
     progress: progress, // Add progress percentage to node data
   };
+
+  // If position is provided, set it and fix the node position
+  if (node.x !== undefined && node.y !== undefined) {
+    visNode.x = node.x;
+    visNode.y = node.y;
+    visNode.fixed = { x: true, y: true }; // Fix position so physics doesn't move it
+  }
+
+  return visNode;
 }
 
 // Get vis-network format for a single edge
@@ -314,11 +326,11 @@ let previousNodes: Set<string> = new Set();
 let previousEdges: Set<string> = new Set();
 let isInitialLoad = true;
 
-// Watch for resource checks changes to update progress bars
+// Watch for resource checks and allNodeResources changes to update progress bars
 watch(
-  () => resourceChecks.value,
+  () => [resourceChecks.value, allNodeResources.value],
   () => {
-    // When checks change, update node progress and redraw
+    // When checks or resources change, update node progress and redraw
     if (nodesDataSet && network) {
       const nodes = nodesDataSet.get() as Array<{ id: string; progress?: number; label?: string }>;
       nodes.forEach((node) => {
@@ -366,7 +378,7 @@ watch(
     // Find nodes to add
     const nodesToAdd = props.nodes
       .filter((n) => !previousNodes.has(n._id))
-      .map((n) => getVisNode(n));
+      .map((n) => getVisNode(n as Node & { x?: number; y?: number }));
 
     // Find nodes to update (title changes)
     const nodesToUpdate = props.nodes
@@ -438,13 +450,70 @@ watch(
 
 // Watch for mode changes
 watch(
-  () => [props.deleteMode, props.connectMode],
-  ([deleteMode, connectMode]) => {
+  () => [props.deleteMode, props.connectMode, props.addNodeMode],
+  ([deleteMode, connectMode, addNodeMode]) => {
     if (network && networkContainer.value) {
       // Always remove all click handlers first to avoid conflicts
       network.off('click');
 
-      if (deleteMode) {
+      if (addNodeMode) {
+        console.log('Entering add node mode');
+        networkContainer.value.style.cursor = 'crosshair';
+
+        network.setOptions({
+          manipulation: { enabled: false },
+          interaction: {
+            dragNodes: false,
+            dragView: true, // Keep view dragging enabled - clicks should still work
+            selectConnectedEdges: false,
+            selectable: false, // Disable node selection
+          },
+        });
+
+        // Handle clicks on canvas (empty space) to add node at that position
+        network.on('click', (params) => {
+          console.log('Add node mode click:', params);
+
+          // Only handle clicks on empty canvas (not on nodes or edges)
+          if (params.nodes.length === 0 && params.edges.length === 0) {
+            const canvas = networkContainer.value;
+            if (!canvas || !network) {
+              console.log('Missing canvas or network');
+              return;
+            }
+
+            // Get click coordinates from params.pointer if available, otherwise use event
+            let domX: number;
+            let domY: number;
+
+            if (params.pointer && params.pointer.DOM) {
+              // Use pointer coordinates from vis-network
+              domX = params.pointer.DOM.x;
+              domY = params.pointer.DOM.y;
+              console.log('Using pointer.DOM:', { x: domX, y: domY });
+            } else if (params.event) {
+              // Fallback to event coordinates
+              const event = params.event as MouseEvent;
+              const rect = canvas.getBoundingClientRect();
+              domX = event.clientX - rect.left;
+              domY = event.clientY - rect.top;
+              console.log('Using event coordinates:', { x: domX, y: domY });
+            } else {
+              console.log('No coordinates available in params');
+              return; // No coordinates available
+            }
+
+            // Convert DOM coordinates to canvas/network coordinates
+            // vis-network's coordinate system: use getPositions to understand the coordinate space
+            // For now, we'll use the canvas coordinates directly and let vis-network handle it
+            // The position will be set when we add the node to the DataSet
+            console.log('Emitting canvasClick with coordinates:', { x: domX, y: domY });
+            emit('canvasClick', { x: domX, y: domY });
+          } else {
+            console.log('Click was on node or edge, ignoring');
+          }
+        });
+      } else if (deleteMode) {
         networkContainer.value.style.cursor = 'not-allowed';
 
         network.setOptions({
@@ -538,6 +607,26 @@ onMounted(() => {
   nextTick(() => {
     // The watch will fire on initial props, but we need to ensure isInitialLoad is handled correctly
     // The watch itself will set isInitialLoad to false on first run
+
+    // Also set up a direct click handler on the container for empty graphs
+    if (networkContainer.value) {
+      networkContainer.value.addEventListener('click', (event) => {
+        if (props.addNodeMode && network) {
+          // Only handle if network click didn't fire (empty graph case)
+          // Check if this is a click on empty space
+          const rect = networkContainer.value!.getBoundingClientRect();
+          const domX = event.clientX - rect.left;
+          const domY = event.clientY - rect.top;
+
+          // Check if click is on any node using getNodeAt
+          const nodeAt = network.getNodeAt({ x: domX, y: domY });
+          if (!nodeAt) {
+            console.log('Direct container click handler - empty space');
+            emit('canvasClick', { x: domX, y: domY });
+          }
+        }
+      });
+    }
   });
 });
 

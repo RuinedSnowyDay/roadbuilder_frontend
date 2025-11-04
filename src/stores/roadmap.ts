@@ -38,6 +38,10 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   // Resource checks cache (resourceId -> Check)
   const resourceChecks = ref<Map<string, { _id: string; checked: boolean }>>(new Map());
 
+  // All resources cache (ResourceList ID -> IndexedResource[])
+  // This allows us to calculate progress for all nodes, not just the selected one
+  const allNodeResources = ref<Map<string, IndexedResource[]>>(new Map());
+
   /**
    * Loads all roadmaps for the current user
    */
@@ -172,6 +176,38 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
       nodes.value = nodesResponse.data || [];
 
+      // Load resources for all nodes to enable progress calculation
+      // Load resources for each node's ResourceList in parallel
+      const resourceLoadPromises = nodes.value.map(async (node) => {
+        try {
+          const resourcesResponse = await callConceptQuery<IndexedResource>(
+            'ResourceList',
+            '_getListResources',
+            {
+              resourceList: node.enrichment,
+            }
+          );
+
+          if (!resourcesResponse.error && resourcesResponse.data) {
+            allNodeResources.value.set(node.enrichment, resourcesResponse.data);
+
+            // Load checks for all resources in parallel
+            const checkPromises = resourcesResponse.data.map((resource) =>
+              loadResourceCheck(resource.resource)
+            );
+            await Promise.all(checkPromises);
+          }
+        } catch (err) {
+          // Silently fail - resources will be loaded when node is opened
+          console.error('Failed to load resources for node:', node._id, err);
+        }
+      });
+
+      // Load resources in background (don't block roadmap loading)
+      Promise.all(resourceLoadPromises).catch(() => {
+        // Ignore errors - resources will load when nodes are opened
+      });
+
       // Load edges
       const edgesResponse = await callConceptQuery<Edge>('EnrichedDAG', '_getGraphEdges', {
         graph: assignedObject.object,
@@ -194,9 +230,11 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   /**
    * Adds a new node to the current roadmap
    * @param nodeTitle - Title of the node
+   * @param x - Optional X coordinate for node position
+   * @param y - Optional Y coordinate for node position
    * @returns Error message or null on success
    */
-  async function addNode(nodeTitle: string): Promise<string | null> {
+  async function addNode(nodeTitle: string, x?: number, y?: number): Promise<string | null> {
     if (!currentGraphId.value) {
       return 'No roadmap loaded';
     }
@@ -257,6 +295,13 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           enrichment: enrichmentId,
         };
         nodes.value.push(newNode);
+
+        // Store position if provided (will be used by RoadmapEditor to position the node)
+        if (x !== undefined && y !== undefined) {
+          // Store position temporarily - RoadmapEditor will use it when adding to DataSet
+          (newNode as Node & { x?: number; y?: number }).x = x;
+          (newNode as Node & { x?: number; y?: number }).y = y;
+        }
       }
 
       return null; // Success
@@ -468,6 +513,9 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
       nodeResources.value = response.data || [];
 
+      // Also cache resources for this node's ResourceList (for progress calculation)
+      allNodeResources.value.set(resourceListId, nodeResources.value);
+
       // Load checks for all resources in parallel
       const checkPromises = nodeResources.value.map((resource) =>
         loadResourceCheck(resource.resource)
@@ -647,6 +695,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     const userId = authStore.currentUser;
 
     if (!userId) {
+      console.error('loadResourceCheck: No user ID');
       return null;
     }
 
@@ -662,11 +711,15 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       );
 
       if (checkResponse.error) {
+        console.error('loadResourceCheck: Error getting check:', checkResponse.error);
         return null;
       }
 
+      // Handle the response - _getCheck returns a single object, not an array
+      const checkArray = Array.isArray(checkResponse.data) ? checkResponse.data : (checkResponse.data ? [checkResponse.data] : []);
+
       // If no check exists, create one
-      if (!checkResponse.data || checkResponse.data.length === 0) {
+      if (!checkArray || checkArray.length === 0) {
         const createResponse = await callConceptAction<{ newCheck: string }>(
           'ObjectChecker',
           'createCheck',
@@ -677,12 +730,18 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         );
 
         if (createResponse.error) {
+          console.error('loadResourceCheck: Error creating check:', createResponse.error);
+          return null;
+        }
+
+        if (!createResponse.data?.newCheck) {
+          console.error('loadResourceCheck: createCheck returned no newCheck ID');
           return null;
         }
 
         // New check is created with checked: false
         const newCheck = {
-          _id: createResponse.data!.newCheck,
+          _id: createResponse.data.newCheck,
           checked: false,
         };
         resourceChecks.value.set(resourceId, newCheck);
@@ -690,7 +749,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       }
 
       // Check exists, return it
-      const check = checkResponse.data[0];
+      const check = checkArray[0];
       if (!check) {
         return null;
       }
@@ -700,7 +759,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       };
       resourceChecks.value.set(resourceId, checkData);
       return checkData;
-    } catch {
+    } catch (err) {
+      console.error('loadResourceCheck: Exception:', err);
       return null;
     }
   }
@@ -967,6 +1027,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     loadResourceCheck,
     toggleResourceCompletion,
     resourceChecks,
+    allNodeResources,
   };
 });
 
