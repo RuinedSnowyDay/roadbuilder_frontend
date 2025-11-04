@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import axios from 'axios';
 import { callConceptAction, callConceptQuery } from '../services/api';
 import type {
   AssignedObject,
@@ -30,6 +31,9 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   const selectedNode = ref<Node | null>(null);
   const nodeResources = ref<IndexedResource[]>([]);
   const loadingResources = ref(false);
+
+  // Resource content cache (resourceId -> content)
+  const resourceContentCache = ref<Map<string, string>>(new Map());
 
   /**
    * Loads all roadmaps for the current user
@@ -618,6 +622,191 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Loads the content for a resource
+   * @param resourceId - ID of the resource object
+   * @returns Content string or null if not found/error
+   */
+  async function loadResourceContent(resourceId: string): Promise<string | null> {
+    // Check cache first
+    if (resourceContentCache.value.has(resourceId)) {
+      return resourceContentCache.value.get(resourceId) || null;
+    }
+
+    const authStore = useAuthStore();
+    const userId = authStore.currentUser;
+
+    if (!userId) {
+      return null;
+    }
+
+    try {
+      // Find file associated with this resource (using resource ID as filename)
+      const filename = `resource-${resourceId}.md`;
+
+      // Get all files for the user
+      const filesResponse = await callConceptQuery<{ file: string; filename: string }>(
+        'FileUploading',
+        '_getFilesByOwner',
+        {
+          owner: userId,
+        }
+      );
+
+      if (filesResponse.error) {
+        return null;
+      }
+
+      // Find file with matching filename
+      const resourceFile = filesResponse.data?.find((f) => f.filename === filename);
+
+      if (!resourceFile) {
+        // No content file exists yet
+        resourceContentCache.value.set(resourceId, '');
+        return '';
+      }
+
+      // Get download URL for the file
+      const downloadURLResponse = await callConceptQuery<{ downloadURL: string }>(
+        'FileUploading',
+        '_getDownloadURL',
+        {
+          file: resourceFile.file,
+        }
+      );
+
+      if (downloadURLResponse.error || !downloadURLResponse.data || downloadURLResponse.data.length === 0) {
+        return null;
+      }
+
+      const downloadURLData = downloadURLResponse.data[0];
+      if (!downloadURLData || !downloadURLData.downloadURL) {
+        return null;
+      }
+
+      const downloadURL = downloadURLData.downloadURL;
+
+      // Fetch the content using axios
+      const contentResponse = await axios.get(downloadURL, {
+        responseType: 'text',
+      });
+
+      const content = contentResponse.data;
+      resourceContentCache.value.set(resourceId, content);
+      return content;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Updates the content of a resource
+   * @param resourceId - ID of the resource object
+   * @param content - Markdown/HTML content to save
+   * @returns Error message or null on success
+   */
+  async function updateResourceContent(resourceId: string, content: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    const userId = authStore.currentUser;
+
+    if (!userId) {
+      return 'User not authenticated';
+    }
+
+    try {
+      const filename = `resource-${resourceId}.md`;
+
+      // Check if file already exists
+      const filesResponse = await callConceptQuery<{ file: string; filename: string }>(
+        'FileUploading',
+        '_getFilesByOwner',
+        {
+          owner: userId,
+        }
+      );
+
+      let fileId: string | null = null;
+
+      if (!filesResponse.error && filesResponse.data) {
+        const existingFile = filesResponse.data.find((f) => f.filename === filename);
+        if (existingFile) {
+          fileId = existingFile.file;
+          // Delete existing file
+          await callConceptAction<Record<string, never>>('FileUploading', 'delete', {
+            file: fileId,
+          });
+        }
+      }
+
+      // Request upload URL for new file
+      const uploadResponse = await callConceptAction<{ file: string; uploadURL: string }>(
+        'FileUploading',
+        'requestUploadURL',
+        {
+          owner: userId,
+          filename: filename,
+        }
+      );
+
+      if (uploadResponse.error) {
+        return uploadResponse.error;
+      }
+
+      if (!uploadResponse.data?.file || !uploadResponse.data?.uploadURL) {
+        return 'Failed to get upload URL';
+      }
+
+      fileId = uploadResponse.data.file;
+      const uploadURL = uploadResponse.data.uploadURL;
+
+      // Deno's contentType('.md') returns 'text/markdown; charset=UTF-8'
+      const contentType = 'text/markdown; charset=UTF-8';
+
+      // Upload content to the presigned URL using axios
+      try {
+        await axios.put(uploadURL, content, {
+          headers: {
+            'Content-Type': contentType,
+          },
+        });
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+          const status = error.response.status;
+          const statusText = error.response.statusText || 'Unknown error';
+          const errorMessage = `Failed to upload content: ${status} ${statusText}`;
+
+          if (status === 403) {
+            return `${errorMessage}. Content-type mismatch. Expected: ${contentType}`;
+          }
+
+          return errorMessage;
+        }
+
+        return `Failed to upload content: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      }
+
+      // Confirm upload
+      const confirmResponse = await callConceptAction<{ file: string }>(
+        'FileUploading',
+        'confirmUpload',
+        {
+          file: fileId,
+        }
+      );
+
+      if (confirmResponse.error) {
+        return confirmResponse.error;
+      }
+
+      // Update cache
+      resourceContentCache.value.set(resourceId, content);
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to save resource content';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -643,6 +832,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     addResource,
     removeResource,
     reorderResource,
+    loadResourceContent,
+    updateResourceContent,
   };
 });
 

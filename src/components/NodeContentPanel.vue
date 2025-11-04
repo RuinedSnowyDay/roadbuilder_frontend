@@ -9,7 +9,7 @@
         <h2>Node Content</h2>
         <button @click="handleClose" class="close-button" title="Close">×</button>
       </div>
-      <div class="dialog-body">
+      <div class="dialog-body" :class="{ 'has-editor': editingResource }">
         <!-- Node Title Editor -->
         <div class="title-section">
           <label for="node-title-input" class="title-label">Node Title:</label>
@@ -63,7 +63,12 @@
             >
               <div class="resource-drag-handle" title="Drag to reorder">⋮⋮</div>
               <div class="resource-index">{{ index + 1 }}</div>
-              <div class="resource-content">
+              <div
+                class="resource-content"
+                @click="handleResourceClick(resource)"
+                title="Click to edit content"
+                style="cursor: pointer;"
+              >
                 <div class="resource-title">{{ resource.title }}</div>
               </div>
               <button
@@ -78,44 +83,55 @@
           </div>
         </div>
 
-        <!-- Add Resource Dialog -->
-        <div
-          v-if="showAddResourceDialog"
-          class="dialog-overlay-small"
-          @click="showAddResourceDialog = false"
-        >
-          <div class="dialog-content-small" @click.stop>
-            <h3>Add Resource</h3>
-            <form @submit.prevent="handleAddResource">
-              <div class="form-group">
-                <label for="resource-title-input">Resource Title *</label>
-                <input
-                  id="resource-title-input"
-                  v-model="newResourceTitle"
-                  type="text"
-                  required
-                  placeholder="Enter resource title"
-                  :disabled="addingResource"
-                  autofocus
-                />
-              </div>
-              <div v-if="addResourceError" class="error-message">{{ addResourceError }}</div>
-              <div class="dialog-actions">
-                <button
-                  type="button"
-                  @click="handleCancelAddResource"
-                  :disabled="addingResource"
-                  class="cancel-button"
-                >
-                  Cancel
-                </button>
-                <button type="submit" :disabled="addingResource" class="submit-button">
-                  {{ addingResource ? 'Adding...' : 'Add' }}
-                </button>
-              </div>
-            </form>
-          </div>
+        <!-- Markdown Editor -->
+        <div v-if="editingResource" class="editor-section">
+          <MarkdownEditor
+            :resource-id="editingResource._id"
+            :resource-title="editingResource.title"
+            :initial-content="editingResourceContent"
+            @save="handleSaveResourceContent"
+            @cancel="handleCancelEditResource"
+          />
         </div>
+      </div>
+    </div>
+
+    <!-- Add Resource Dialog -->
+    <div
+      v-if="showAddResourceDialog"
+      class="dialog-overlay-small"
+      @click="showAddResourceDialog = false"
+    >
+      <div class="dialog-content-small" @click.stop>
+        <h3>Add Resource</h3>
+        <form @submit.prevent="handleAddResource">
+          <div class="form-group">
+            <label for="resource-title-input">Resource Title *</label>
+            <input
+              id="resource-title-input"
+              v-model="newResourceTitle"
+              type="text"
+              required
+              placeholder="Enter resource title"
+              :disabled="addingResource"
+              autofocus
+            />
+          </div>
+          <div v-if="addResourceError" class="error-message">{{ addResourceError }}</div>
+          <div class="dialog-actions">
+            <button
+              type="button"
+              @click="handleCancelAddResource"
+              :disabled="addingResource"
+              class="cancel-button"
+            >
+              Cancel
+            </button>
+            <button type="submit" :disabled="addingResource" class="submit-button">
+              {{ addingResource ? 'Adding...' : 'Add' }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -125,6 +141,8 @@
 import { ref, computed, watch } from 'vue';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
+import MarkdownEditor from './MarkdownEditor.vue';
+import type { IndexedResource } from '../services/types';
 
 const roadmapStore = useRoadmapStore();
 const { selectedNode, nodeResources, loadingResources, error, nodes } = storeToRefs(roadmapStore);
@@ -146,6 +164,10 @@ const deletingResourceIndex = ref<number | null>(null);
 // Drag and drop state
 const draggingIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
+
+// Resource editing state
+const editingResource = ref<IndexedResource | null>(null);
+const editingResourceContent = ref<string>('');
 
 // Watch for selectedNode changes to initialize title editing
 watch(selectedNode, (newNode) => {
@@ -260,11 +282,18 @@ function handleCancelAddResource() {
 async function handleDeleteResource(index: number) {
   if (confirm(`Are you sure you want to delete "${resources.value[index]?.title}"?`)) {
     deletingResourceIndex.value = index;
+    const resourceToDelete = resources.value[index];
 
     try {
       const error = await roadmapStore.removeResource(index);
       if (error) {
         alert(`Failed to delete resource: ${error}`);
+      } else {
+        // If the deleted resource was being edited, close the editor
+        if (editingResource.value && editingResource.value._id === resourceToDelete?._id) {
+          editingResource.value = null;
+          editingResourceContent.value = '';
+        }
       }
     } catch (err) {
       alert(`Failed to delete resource: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -330,6 +359,42 @@ async function handleDrop(event: DragEvent, toIndex: number) {
   } catch (err) {
     alert(`Failed to reorder resource: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
+}
+
+// Resource content editing
+async function handleResourceClick(resource: IndexedResource) {
+  editingResource.value = resource;
+  editingResourceContent.value = 'Loading...';
+
+  // Load content from backend
+  const content = await roadmapStore.loadResourceContent(resource.resource);
+  editingResourceContent.value = content || '';
+}
+
+async function handleSaveResourceContent(content: string) {
+  if (!editingResource.value) {
+    return;
+  }
+
+  try {
+    const error = await roadmapStore.updateResourceContent(editingResource.value.resource, content);
+    if (error) {
+      alert(`Failed to save resource content: ${error}`);
+      return false; // Indicate failure
+    } else {
+      // Success - update cached content but keep editor open
+      editingResourceContent.value = content;
+      return true; // Indicate success
+    }
+  } catch (err) {
+    alert(`Failed to save resource content: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    return false; // Indicate failure
+  }
+}
+
+function handleCancelEditResource() {
+  editingResource.value = null;
+  editingResourceContent.value = '';
 }
 </script>
 
@@ -400,6 +465,12 @@ async function handleDrop(event: DragEvent, toIndex: number) {
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-body.has-editor {
+  max-height: 80vh;
 }
 
 .title-section {
@@ -464,6 +535,12 @@ async function handleDrop(event: DragEvent, toIndex: number) {
 
 .resources-section {
   margin-top: 1rem;
+}
+
+.editor-section {
+  margin-top: 1.5rem;
+  border-top: 2px solid #e0e0e0;
+  padding-top: 1.5rem;
 }
 
 .resources-header {
@@ -583,12 +660,28 @@ async function handleDrop(event: DragEvent, toIndex: number) {
 
 .resource-content {
   flex: 1;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.resource-content:hover {
+  color: #4caf50;
 }
 
 .resource-title {
   font-size: 0.95rem;
   color: #333;
   font-weight: 500;
+}
+
+.editor-section {
+  margin-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+  max-height: 600px;
 }
 
 .delete-resource-button {

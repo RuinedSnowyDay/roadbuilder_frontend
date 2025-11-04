@@ -89,3 +89,16 @@ export interface AppendResourceResponse {
 export interface CreateCheckResponse {
   newCheck: string;
 }
+
+export interface RequestUploadURLResponse {
+  file: string;
+  uploadURL: string;
+}
+
+export interface ConfirmUploadResponse {
+  file: string;
+}
+
+export interface GetDownloadURLResponse {
+  downloadURL: string;
+}
