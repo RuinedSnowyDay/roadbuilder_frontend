@@ -4,7 +4,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
-import { Network, DataSet } from 'vis-network';
+import { Network } from 'vis-network';
+import { DataSet } from 'vis-data';
 import type { Node, Edge } from '../services/types';
 
 interface Props {
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   nodeDoubleClick: [nodeId: string];
   nodeClick: [nodeId: string];
+  edgeClick: [edgeId: string];
   edgeCreated: [sourceNodeId: string, targetNodeId: string];
 }>();
 
@@ -158,12 +160,19 @@ function initializeNetwork() {
     }
   });
 
-  // Handle node click for deletion (when in delete mode)
+  // Handle node and edge clicks for deletion (when in delete mode)
   network.on('click', (params) => {
     // Only handle clicks if in delete mode and not in connect mode
-    if (props.deleteMode && !props.connectMode && params.nodes.length > 0) {
-      const nodeId = params.nodes[0] as string;
-      emit('nodeClick', nodeId);
+    if (props.deleteMode && !props.connectMode) {
+      if (params.nodes.length > 0) {
+        // Node clicked
+        const nodeId = params.nodes[0] as string;
+        emit('nodeClick', nodeId);
+      } else if (params.edges.length > 0) {
+        // Edge clicked
+        const edgeId = params.edges[0] as string;
+        emit('edgeClick', edgeId);
+      }
     }
   });
 

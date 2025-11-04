@@ -54,7 +54,7 @@
             <span class="toolbar-label">Select</span>
           </button>
           <div v-if="actionMode === 'delete'" class="toolbar-hint">
-            Click on a node to delete it
+            Click on a node or edge to delete it
           </div>
           <div v-if="actionMode === 'connect'" class="toolbar-hint">
             Click a source node, then click a target node to connect them
@@ -75,6 +75,7 @@
               :connect-mode="actionMode === 'connect'"
               @node-double-click="handleNodeDoubleClick"
               @node-click="handleNodeClick"
+              @edge-click="handleEdgeClick"
               @edge-created="handleEdgeCreated"
             />
           </div>
@@ -159,39 +160,69 @@
         </div>
       </div>
 
-      <!-- Delete Confirmation Dialog -->
-      <div
-        v-if="showDeleteConfirm"
-        class="dialog-overlay"
-        @click="showDeleteConfirm = false"
-      >
-        <div class="dialog-content" @click.stop>
-          <h2>Delete Node</h2>
-          <p>Are you sure you want to delete the node "{{ deletingNodeTitle }}"?</p>
-          <p class="warning-text">This will also remove all connections to this node.</p>
-          <div class="dialog-actions">
-            <button
-              type="button"
-              @click="showDeleteConfirm = false"
-              :disabled="deletingNode"
-              class="cancel-button"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              @click="handleDeleteNode"
-              :disabled="deletingNode"
-              class="delete-button"
-            >
-              {{ deletingNode ? 'Deleting...' : 'Delete' }}
-            </button>
+          <!-- Delete Node Confirmation Dialog -->
+          <div
+            v-if="showDeleteConfirm"
+            class="dialog-overlay"
+            @click="showDeleteConfirm = false"
+          >
+            <div class="dialog-content" @click.stop>
+              <h2>Delete Node</h2>
+              <p>Are you sure you want to delete the node "{{ deletingNodeTitle }}"?</p>
+              <p class="warning-text">This will also remove all connections to this node.</p>
+              <div class="dialog-actions">
+                <button
+                  type="button"
+                  @click="showDeleteConfirm = false"
+                  :disabled="deletingNode"
+                  class="cancel-button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  @click="handleDeleteNode"
+                  :disabled="deletingNode"
+                  class="delete-button"
+                >
+                  {{ deletingNode ? 'Deleting...' : 'Delete' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Delete Edge Confirmation Dialog -->
+          <div
+            v-if="showDeleteEdgeConfirm"
+            class="dialog-overlay"
+            @click="showDeleteEdgeConfirm = false"
+          >
+            <div class="dialog-content" @click.stop>
+              <h2>Delete Connection</h2>
+              <p>Are you sure you want to delete the connection "{{ deletingEdgeDescription }}"?</p>
+              <div class="dialog-actions">
+                <button
+                  type="button"
+                  @click="showDeleteEdgeConfirm = false"
+                  :disabled="deletingEdge"
+                  class="cancel-button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  @click="handleDeleteEdge"
+                  :disabled="deletingEdge"
+                  class="delete-button"
+                >
+                  {{ deletingEdge ? 'Deleting...' : 'Delete' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
-</template>
+    </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
@@ -199,6 +230,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
 import { storeToRefs } from 'pinia';
 import RoadmapEditor from '../components/RoadmapEditor.vue';
+import type { Node, Edge } from '../services/types';
 
 const route = useRoute();
 const roadmapStore = useRoadmapStore();
@@ -224,6 +256,12 @@ const showDeleteConfirm = ref(false);
 const deletingNodeId = ref<string | null>(null);
 const deletingNodeTitle = ref('');
 const deletingNode = ref(false);
+
+// Delete edge confirmation
+const showDeleteEdgeConfirm = ref(false);
+const deletingEdgeId = ref<string | null>(null);
+const deletingEdgeDescription = ref('');
+const deletingEdge = ref(false);
 
 // Edge creation
 const addingEdge = ref(false);
@@ -278,11 +316,26 @@ function handleNodeDoubleClick(nodeId: string) {
 
 function handleNodeClick(nodeId: string) {
   if (actionMode.value === 'delete') {
-    const node = nodes.value.find((n) => n._id === nodeId);
+    const node = nodes.value.find((n: Node) => n._id === nodeId);
     if (node) {
       deletingNodeId.value = nodeId;
       deletingNodeTitle.value = node.title;
       showDeleteConfirm.value = true;
+    }
+  }
+}
+
+function handleEdgeClick(edgeId: string) {
+  if (actionMode.value === 'delete') {
+    const edge = edges.value.find((e: Edge) => e._id === edgeId);
+    if (edge) {
+      deletingEdgeId.value = edgeId;
+      const sourceNode = nodes.value.find((n: Node) => n._id === edge.source);
+      const targetNode = nodes.value.find((n: Node) => n._id === edge.target);
+      const sourceTitle = sourceNode?.title || 'Unknown';
+      const targetTitle = targetNode?.title || 'Unknown';
+      deletingEdgeDescription.value = `${sourceTitle} → ${targetTitle}`;
+      showDeleteEdgeConfirm.value = true;
     }
   }
 }
@@ -358,6 +411,31 @@ async function handleDeleteNode() {
     alert(`Failed to delete node: ${err instanceof Error ? err.message : 'Unknown error'}`);
   } finally {
     deletingNode.value = false;
+  }
+}
+
+async function handleDeleteEdge() {
+  if (!deletingEdgeId.value) {
+    return;
+  }
+
+  deletingEdge.value = true;
+
+  try {
+    const error = await roadmapStore.deleteEdge(deletingEdgeId.value);
+    if (error) {
+      alert(`Failed to delete edge: ${error}`);
+    } else {
+      // Success - close dialog and exit delete mode
+      showDeleteEdgeConfirm.value = false;
+      deletingEdgeId.value = null;
+      deletingEdgeDescription.value = '';
+      actionMode.value = 'select';
+    }
+  } catch (err) {
+    alert(`Failed to delete edge: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    deletingEdge.value = false;
   }
 }
 

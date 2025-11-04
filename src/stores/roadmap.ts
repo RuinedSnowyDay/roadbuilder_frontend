@@ -395,6 +395,30 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Deletes an edge from the roadmap
+   * @param edgeId - ID of the edge to delete
+   * @returns Error message or null on success
+   */
+  async function deleteEdge(edgeId: string): Promise<string | null> {
+    try {
+      const response = await callConceptAction('EnrichedDAG', 'removeEdge', {
+        edge: edgeId,
+      });
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Optimistically update the graph - remove edge from local state
+      edges.value = edges.value.filter((e) => e._id !== edgeId);
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to delete edge';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -411,6 +435,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     updateNodeTitle,
     deleteNode,
     addEdge,
+    deleteEdge,
   };
 });
 
