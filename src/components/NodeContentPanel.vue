@@ -52,13 +52,22 @@
               v-for="(resource, index) in resources"
               :key="resource._id"
               class="resource-item"
+              :class="{ 'dragging': draggingIndex === index, 'drag-over': dragOverIndex === index }"
+              draggable="true"
+              @dragstart="handleDragStart($event, index)"
+              @dragend="handleDragEnd"
+              @dragover.prevent="handleDragOver($event, index)"
+              @dragenter.prevent="handleDragEnter(index)"
+              @dragleave="handleDragLeave"
+              @drop="handleDrop($event, index)"
             >
+              <div class="resource-drag-handle" title="Drag to reorder">⋮⋮</div>
               <div class="resource-index">{{ index + 1 }}</div>
               <div class="resource-content">
                 <div class="resource-title">{{ resource.title }}</div>
               </div>
               <button
-                @click="handleDeleteResource(index)"
+                @click.stop="handleDeleteResource(index)"
                 class="delete-resource-button"
                 title="Delete Resource"
                 :disabled="deletingResourceIndex === index"
@@ -133,6 +142,10 @@ const newResourceTitle = ref('');
 const addingResource = ref(false);
 const addResourceError = ref('');
 const deletingResourceIndex = ref<number | null>(null);
+
+// Drag and drop state
+const draggingIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
 
 // Watch for selectedNode changes to initialize title editing
 watch(selectedNode, (newNode) => {
@@ -258,6 +271,64 @@ async function handleDeleteResource(index: number) {
     } finally {
       deletingResourceIndex.value = null;
     }
+  }
+}
+
+// Drag and drop handlers
+function handleDragStart(event: DragEvent, index: number) {
+  draggingIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', index.toString());
+  }
+}
+
+function handleDragEnd() {
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
+}
+
+function handleDragOver(event: DragEvent, index: number) {
+  if (draggingIndex.value !== null && draggingIndex.value !== index) {
+    event.preventDefault();
+    dragOverIndex.value = index;
+  }
+}
+
+function handleDragEnter(index: number) {
+  if (draggingIndex.value !== null && draggingIndex.value !== index) {
+    dragOverIndex.value = index;
+  }
+}
+
+function handleDragLeave() {
+  // Only clear if we're not entering another item
+  setTimeout(() => {
+    if (dragOverIndex.value !== null) {
+      dragOverIndex.value = null;
+    }
+  }, 50);
+}
+
+async function handleDrop(event: DragEvent, toIndex: number) {
+  event.preventDefault();
+
+  if (draggingIndex.value === null || draggingIndex.value === toIndex) {
+    dragOverIndex.value = null;
+    return;
+  }
+
+  const fromIndex = draggingIndex.value;
+  draggingIndex.value = null;
+  dragOverIndex.value = null;
+
+  try {
+    const error = await roadmapStore.reorderResource(fromIndex, toIndex);
+    if (error) {
+      alert(`Failed to reorder resource: ${error}`);
+    }
+  } catch (err) {
+    alert(`Failed to reorder resource: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 }
 </script>
@@ -454,7 +525,9 @@ async function handleDeleteResource(index: number) {
   align-items: center;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, opacity 0.2s, transform 0.2s;
+  cursor: move;
+  position: relative;
 }
 
 .resource-item:last-child {
@@ -467,6 +540,31 @@ async function handleDeleteResource(index: number) {
 
 .resource-item:hover .delete-resource-button {
   opacity: 1;
+}
+
+.resource-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.resource-item.drag-over {
+  background-color: #e3f2fd;
+  border-top: 2px solid #2196f3;
+  transform: translateY(-2px);
+}
+
+.resource-drag-handle {
+  color: #999;
+  font-size: 1rem;
+  cursor: grab;
+  margin-right: 0.5rem;
+  user-select: none;
+  line-height: 1;
+  padding: 0.25rem;
+}
+
+.resource-drag-handle:active {
+  cursor: grabbing;
 }
 
 .resource-index {

@@ -556,6 +556,68 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Reorders resources by moving a resource from one index to another
+   * @param fromIndex - Original index of the resource
+   * @param toIndex - Target index for the resource
+   * @returns Error message or null on success
+   */
+  async function reorderResource(fromIndex: number, toIndex: number): Promise<string | null> {
+    if (!selectedNode.value) {
+      return 'No node selected';
+    }
+
+    // Don't do anything if indices are the same
+    if (fromIndex === toIndex) {
+      return null;
+    }
+
+    const resourceListId = selectedNode.value.enrichment;
+
+    // Optimistically update the local state first for seamless UI
+    const resources = [...nodeResources.value];
+    const [movedResource] = resources.splice(fromIndex, 1);
+
+    if (!movedResource) {
+      return 'Resource not found';
+    }
+
+    resources.splice(toIndex, 0, movedResource);
+
+    // Update indices to match new positions
+    const updatedResources = resources.map((resource, index) => ({
+      ...resource,
+      index: index,
+    }));
+
+    nodeResources.value = updatedResources;
+
+    try {
+      const response = await callConceptAction<Record<string, never>>(
+        'ResourceList',
+        'moveResource',
+        {
+          resourceList: resourceListId,
+          oldIndex: fromIndex,
+          newIndex: toIndex,
+        }
+      );
+
+      if (response.error) {
+        // Revert optimistic update on error
+        await loadNodeResources(selectedNode.value._id);
+        return response.error;
+      }
+
+      // Success - state already updated optimistically
+      return null;
+    } catch (err) {
+      // Revert optimistic update on error
+      await loadNodeResources(selectedNode.value._id);
+      return err instanceof Error ? err.message : 'Failed to reorder resource';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -580,6 +642,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     clearSelectedNode,
     addResource,
     removeResource,
+    reorderResource,
   };
 });
 
