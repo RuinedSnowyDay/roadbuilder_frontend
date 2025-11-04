@@ -9,6 +9,7 @@ import type {
   CreateAssignedObjectResponse,
   CreateResourceListResponse,
   AddNodeResponse,
+  AddEdgeResponse,
 } from '../services/types';
 import { useAuthStore } from './auth';
 
@@ -326,6 +327,74 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     }
   }
 
+  /**
+   * Adds a new edge between two nodes
+   * @param sourceNodeId - ID of the source node
+   * @param targetNodeId - ID of the target node
+   * @returns Error message or null on success
+   */
+  async function addEdge(sourceNodeId: string, targetNodeId: string): Promise<string | null> {
+    if (!currentGraphId.value) {
+      return 'No roadmap loaded';
+    }
+
+    const authStore = useAuthStore();
+    if (!authStore.currentUser) {
+      return 'User not authenticated';
+    }
+
+    // Check if edge already exists
+    const existingEdge = edges.value.find(
+      (e) => e.source === sourceNodeId && e.target === targetNodeId
+    );
+    if (existingEdge) {
+      return 'Edge already exists between these nodes';
+    }
+
+    try {
+      // Find the source node to get its enrichment ID
+      const sourceNode = nodes.value.find((n) => n._id === sourceNodeId);
+      if (!sourceNode) {
+        return 'Source node not found';
+      }
+
+      // Use the source node's enrichment ID for the edge
+      const enrichmentId = sourceNode.enrichment;
+
+      // Add the edge to the graph
+      const addEdgeResponse = await callConceptAction<AddEdgeResponse>(
+        'EnrichedDAG',
+        'addEdge',
+        {
+          graph: currentGraphId.value,
+          sourceNode: sourceNodeId,
+          targetNode: targetNodeId,
+          enrichment: enrichmentId,
+        }
+      );
+
+      if (addEdgeResponse.error) {
+        return addEdgeResponse.error;
+      }
+
+      if (!addEdgeResponse.data?.newEdge) {
+        return 'Failed to create edge';
+      }
+
+      // Reload nodes and edges to update the graph
+      if (currentRoadmap.value) {
+        const error = await loadRoadmap(currentRoadmap.value._id);
+        if (error) {
+          return error;
+        }
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to add edge';
+    }
+  }
+
   return {
     roadmaps,
     loading,
@@ -341,6 +410,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     addNode,
     updateNodeTitle,
     deleteNode,
+    addEdge,
   };
 });
 

@@ -77,3 +77,7 @@ export interface CreateResourceListResponse {
 export interface AddNodeResponse {
   newNode: string;
 }
+
+export interface AddEdgeResponse {
+  newEdge: string;
+}
