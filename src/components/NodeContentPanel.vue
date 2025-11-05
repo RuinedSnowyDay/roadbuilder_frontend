@@ -263,7 +263,7 @@ function handleTitleCancel() {
 
 async function handleAddResource() {
   if (isSharedRoadmap.value) return;
-  
+
   if (!newResourceTitle.value.trim()) {
     addResourceError.value = 'Resource title is required';
     return;
@@ -297,7 +297,7 @@ function handleCancelAddResource() {
 
 async function handleDeleteResource(index: number) {
   if (isSharedRoadmap.value) return;
-  
+
   if (confirm(`Are you sure you want to delete "${resources.value[index]?.title}"?`)) {
     deletingResourceIndex.value = index;
     const resourceToDelete = resources.value[index];
@@ -359,7 +359,7 @@ function handleDragLeave() {
 
 async function handleDrop(event: DragEvent, toIndex: number) {
   event.preventDefault();
-  
+
   if (isSharedRoadmap.value) return;
 
   if (draggingIndex.value === null || draggingIndex.value === toIndex) {
@@ -457,7 +457,7 @@ function handleCancelEditResource() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -465,14 +465,15 @@ function handleCancelEditResource() {
 }
 
 .node-content-dialog {
-  background-color: white;
+  background-color: var(--gunmetal-bg);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .dialog-header {
@@ -480,15 +481,15 @@ function handleCancelEditResource() {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #f9f9f9;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--gunmetal-bg-dark);
   border-radius: 8px 8px 0 0;
 }
 
 .dialog-header h2 {
   margin: 0;
   font-size: 1.25rem;
-  color: #333;
+  color: var(--color-heading);
   font-weight: 600;
 }
 
@@ -496,7 +497,7 @@ function handleCancelEditResource() {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #666;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -505,12 +506,12 @@ function handleCancelEditResource() {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
 .close-button:hover {
-  background-color: #e0e0e0;
-  color: #333;
+  background-color: rgba(233, 169, 108, 0.1);
+  color: var(--color-accent);
 }
 
 .dialog-body {
@@ -532,7 +533,7 @@ function handleCancelEditResource() {
 .title-label {
   display: block;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text);
   margin-bottom: 0.5rem;
   font-size: 0.95rem;
 }
@@ -545,7 +546,7 @@ function handleCancelEditResource() {
 .title-input {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--color-border);
   border-radius: 4px;
   font-size: 1rem;
   transition: border-color 0.2s;
@@ -553,15 +554,17 @@ function handleCancelEditResource() {
   height: 44px; /* Fixed height to prevent layout shift */
   min-height: 44px;
   max-height: 44px;
+  background-color: var(--gunmetal-bg-dark);
+  color: var(--color-text);
 }
 
 .title-input:focus {
   outline: none;
-  border-color: #4caf50;
+  border-color: var(--color-accent);
 }
 
 .title-input.error {
-  border-color: #f44336;
+  border-color: #ff6b6b;
   animation: shake 0.3s;
 }
 
@@ -573,7 +576,7 @@ function handleCancelEditResource() {
 
 .error-message {
   margin-top: 0.5rem;
-  color: #f44336;
+  color: #ff6b6b;
   font-size: 0.85rem;
   animation: fadeIn 0.3s;
   min-height: 20px; /* Reserve space to prevent layout shift */
@@ -591,7 +594,7 @@ function handleCancelEditResource() {
 
 .editor-section {
   margin-top: 1.5rem;
-  border-top: 2px solid #e0e0e0;
+  border-top: 2px solid var(--color-border);
   padding-top: 1.5rem;
 }
 
@@ -605,23 +608,24 @@ function handleCancelEditResource() {
 .resources-title {
   margin: 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--color-heading);
   font-weight: 600;
 }
 
 .add-resource-button {
   padding: 0.5rem 1rem;
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
   border: none;
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
   transition: background-color 0.2s;
+  font-weight: 600;
 }
 
 .add-resource-button:hover {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .loading,
@@ -629,11 +633,11 @@ function handleCancelEditResource() {
 .empty-state {
   padding: 2rem 1rem;
   text-align: center;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .error {
-  color: #f44336;
+  color: #ff6b6b;
 }
 
 .empty-state p {
@@ -644,9 +648,10 @@ function handleCancelEditResource() {
 .resources-list {
   max-height: 400px;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0.5rem 0;
+  background-color: var(--gunmetal-bg-dark);
 }
 
 .resource-checkbox {
@@ -666,7 +671,7 @@ function handleCancelEditResource() {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
   transition: background-color 0.2s, opacity 0.2s, transform 0.2s;
   cursor: move;
   position: relative;
@@ -677,7 +682,7 @@ function handleCancelEditResource() {
 }
 
 .resource-item:hover {
-  background-color: #f9f9f9;
+  background-color: rgba(233, 169, 108, 0.1);
 }
 
 .resource-item:hover .delete-resource-button {
@@ -690,13 +695,13 @@ function handleCancelEditResource() {
 }
 
 .resource-item.drag-over {
-  background-color: #e3f2fd;
-  border-top: 2px solid #2196f3;
+  background-color: rgba(233, 169, 108, 0.2);
+  border-top: 2px solid var(--color-accent);
   transform: translateY(-2px);
 }
 
 .resource-drag-handle {
-  color: #999;
+  color: var(--gunmetal-secondary);
   font-size: 1rem;
   cursor: grab;
   margin-right: 0.5rem;
@@ -715,11 +720,11 @@ function handleCancelEditResource() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #e0e0e0;
+  background-color: var(--gunmetal-bg);
   border-radius: 50%;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #666;
+  color: var(--color-text-secondary);
   margin-right: 0.75rem;
 }
 
@@ -730,18 +735,18 @@ function handleCancelEditResource() {
 }
 
 .resource-content:hover {
-  color: #4caf50;
+  color: var(--color-accent);
 }
 
 .resource-title {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--color-text);
   font-weight: 500;
 }
 
 .editor-section {
   margin-top: 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--color-border);
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -753,7 +758,7 @@ function handleCancelEditResource() {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #f44336;
+  color: #ff6b6b;
   cursor: pointer;
   padding: 0;
   width: 24px;
@@ -768,8 +773,8 @@ function handleCancelEditResource() {
 }
 
 .delete-resource-button:hover {
-  background-color: #ffebee;
-  color: #c62828;
+  background-color: rgba(255, 107, 107, 0.15);
+  color: #ff5252;
 }
 
 .delete-resource-button:disabled {
@@ -783,7 +788,7 @@ function handleCancelEditResource() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -791,18 +796,19 @@ function handleCancelEditResource() {
 }
 
 .dialog-content-small {
-  background-color: white;
+  background-color: var(--gunmetal-bg);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   width: 90%;
   max-width: 400px;
   padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .dialog-content-small h3 {
   margin: 0 0 1rem 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--color-heading);
   font-weight: 600;
 }
 
@@ -813,7 +819,7 @@ function handleCancelEditResource() {
 .form-group label {
   display: block;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text);
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
@@ -821,16 +827,22 @@ function handleCancelEditResource() {
 .form-group input {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--color-border);
   border-radius: 4px;
   font-size: 1rem;
   box-sizing: border-box;
   transition: border-color 0.2s;
+  background-color: var(--gunmetal-bg-dark);
+  color: var(--color-text);
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #4caf50;
+  border-color: var(--color-accent);
+}
+
+.form-group input::placeholder {
+  color: var(--color-text-muted);
 }
 
 .dialog-actions {
@@ -847,30 +859,33 @@ function handleCancelEditResource() {
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
 .cancel-button {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .cancel-button:hover {
-  background-color: #e0e0e0;
+  background-color: rgba(132, 136, 143, 0.1);
+  border-color: var(--gunmetal-secondary);
 }
 
 .submit-button {
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
+  font-weight: 600;
 }
 
 .submit-button:hover {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .submit-button:disabled,
 .cancel-button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 </style>

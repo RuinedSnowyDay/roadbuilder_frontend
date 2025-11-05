@@ -174,47 +174,48 @@ function navigateToRoadmap(roadmapId: string) {
 
 h1 {
   margin: 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 2rem;
 }
 
 .section-title {
   margin: 2rem 0 1rem 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.5rem;
   font-weight: 600;
 }
 
 .create-button {
   padding: 0.75rem 1.5rem;
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
   border: none;
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  transition: background-color 0.2s;
 }
 
 .create-button:hover {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .loading,
 .error {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .error {
-  color: #f44336;
+  color: #ff6b6b;
 }
 
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .empty-state p {
@@ -229,22 +230,23 @@ h1 {
 }
 
 .roadmap-card {
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--gunmetal-bg);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
 }
 
 .roadmap-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(233, 169, 108, 0.2);
   transform: translateY(-2px);
+  border-color: var(--color-accent);
 }
 
 .roadmap-title {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--color-heading);
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -257,17 +259,17 @@ h1 {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  background-color: #2196f3;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .roadmap-description {
   margin: 0;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   line-height: 1.5;
 }
@@ -279,7 +281,7 @@ h1 {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -287,18 +289,19 @@ h1 {
 }
 
 .dialog-content {
-  background: white;
+  background: var(--gunmetal-bg);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 2rem;
   width: 90%;
   max-width: 500px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .dialog-content h2 {
   margin-top: 0;
   margin-bottom: 1.5rem;
-  color: #333;
+  color: var(--color-heading);
 }
 
 .form-group {
@@ -308,7 +311,7 @@ h1 {
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -316,17 +319,24 @@ h1 {
 .form-group textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 1rem;
   box-sizing: border-box;
   font-family: inherit;
+  background-color: var(--gunmetal-bg-dark);
+  color: var(--color-text);
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #4caf50;
+  border-color: var(--color-accent);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--color-text-muted);
 }
 
 .form-group textarea {
@@ -335,12 +345,13 @@ h1 {
 
 .form-group input:disabled,
 .form-group textarea:disabled {
-  background-color: #f5f5f5;
+  background-color: var(--gunmetal-bg);
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .error-message {
-  color: #f44336;
+  color: #ff6b6b;
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
@@ -360,31 +371,35 @@ h1 {
   font-size: 1rem;
   cursor: pointer;
   font-weight: 500;
+  transition: all 0.2s;
 }
 
 .cancel-button {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .cancel-button:hover:not(:disabled) {
-  background-color: #e0e0e0;
+  background-color: rgba(132, 136, 143, 0.1);
+  border-color: var(--gunmetal-secondary);
 }
 
 .submit-button {
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
+  font-weight: 600;
 }
 
 .submit-button:hover:not(:disabled) {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .cancel-button:disabled,
 .submit-button:disabled {
-  background-color: #cccccc;
+  background-color: var(--gunmetal-secondary);
   cursor: not-allowed;
-  color: #666;
+  opacity: 0.5;
 }
 </style>
 

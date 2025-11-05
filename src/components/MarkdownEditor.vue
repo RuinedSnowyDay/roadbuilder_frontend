@@ -145,7 +145,7 @@ function handleCancel() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: white;
+  background-color: var(--gunmetal-bg-dark);
 }
 
 .editor-header {
@@ -153,14 +153,14 @@ function handleCancel() {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: #f9f9f9;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--gunmetal-bg);
 }
 
 .editor-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--color-heading);
   font-weight: 600;
 }
 
@@ -180,46 +180,49 @@ function handleCancel() {
 }
 
 .save-button {
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
+  font-weight: 600;
 }
 
 .save-button:hover:not(:disabled) {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .save-button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .save-button.saved {
-  background-color: #81c784 !important; /* Green-grey color */
+  background-color: var(--gunmetal-secondary) !important;
   cursor: not-allowed;
 }
 
 .save-button.saved:disabled {
-  background-color: #81c784 !important; /* Green-grey color */
+  background-color: var(--gunmetal-secondary) !important;
   opacity: 0.8;
   cursor: not-allowed;
 }
 
 .save-button.saved:hover {
-  background-color: #81c784 !important; /* Keep green-grey on hover */
+  background-color: var(--gunmetal-secondary) !important;
   cursor: not-allowed;
 }
 
 .cancel-button {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .cancel-button:hover:not(:disabled) {
-  background-color: #e0e0e0;
+  background-color: rgba(132, 136, 143, 0.1);
+  border-color: var(--gunmetal-secondary);
 }
 
 .cancel-button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -235,7 +238,7 @@ function handleCancel() {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   font-size: 1rem;
   line-height: 1.6;
-  color: #333;
+  color: var(--color-text);
 }
 
 .editor-content :deep(.ProseMirror p) {
@@ -274,48 +277,58 @@ function handleCancel() {
 }
 
 .editor-content :deep(.ProseMirror code) {
-  background-color: #f5f5f5;
+  background-color: var(--gunmetal-bg);
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
   font-family: 'Courier New', monospace;
   font-size: 0.9em;
+  color: var(--color-accent);
 }
 
 .editor-content :deep(.ProseMirror pre) {
-  background-color: #f5f5f5;
+  background-color: var(--gunmetal-bg);
   padding: 1rem;
   border-radius: 4px;
   overflow-x: auto;
   margin: 1rem 0;
+  border: 1px solid var(--color-border);
 }
 
 .editor-content :deep(.ProseMirror pre code) {
   background-color: transparent;
   padding: 0;
+  color: var(--color-text);
 }
 
 .editor-content :deep(.ProseMirror blockquote) {
-  border-left: 4px solid #e0e0e0;
+  border-left: 4px solid var(--color-accent);
   padding-left: 1rem;
   margin: 1rem 0;
-  color: #666;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
 .editor-content :deep(.ProseMirror strong) {
   font-weight: 600;
+  color: var(--color-heading);
 }
 
 .editor-content :deep(.ProseMirror em) {
   font-style: italic;
 }
 
+.editor-content :deep(.ProseMirror h1),
+.editor-content :deep(.ProseMirror h2),
+.editor-content :deep(.ProseMirror h3) {
+  color: var(--color-heading);
+}
+
 .error-message {
   padding: 0.75rem 1.5rem;
-  background-color: #ffebee;
-  color: #f44336;
+  background-color: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
   font-size: 0.9rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--color-border);
 }
 </style>
 

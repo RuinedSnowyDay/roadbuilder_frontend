@@ -77,23 +77,24 @@ async function handleLogin() {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: var(--color-background);
 }
 
 .login-card {
-  background: white;
+  background: var(--gunmetal-bg);
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 400px;
+  border: 1px solid var(--color-border);
 }
 
 h1 {
   margin-top: 0;
   margin-bottom: 1.5rem;
   text-align: center;
-  color: #333;
+  color: var(--color-heading);
 }
 
 .form-group {
@@ -103,26 +104,32 @@ h1 {
 label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--color-text);
   font-weight: 500;
 }
 
 input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 1rem;
   box-sizing: border-box;
+  background-color: var(--gunmetal-bg-dark);
+  color: var(--color-text);
 }
 
 input:focus {
   outline: none;
-  border-color: #4caf50;
+  border-color: var(--color-accent);
+}
+
+input::placeholder {
+  color: var(--color-text-muted);
 }
 
 .error-message {
-  color: #f44336;
+  color: #ff6b6b;
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
@@ -130,37 +137,41 @@ input:focus {
 .submit-button {
   width: 100%;
   padding: 0.75rem;
-  background-color: #4caf50;
-  color: white;
+  background-color: var(--color-accent);
+  color: var(--gunmetal-bg-dark);
   border: none;
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
   margin-top: 0.5rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
 }
 
 .submit-button:hover:not(:disabled) {
-  background-color: #45a049;
+  background-color: var(--color-accent-hover);
 }
 
 .submit-button:disabled {
-  background-color: #cccccc;
+  background-color: var(--gunmetal-secondary);
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .register-link {
   text-align: center;
   margin-top: 1.5rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .register-link a {
-  color: #4caf50;
+  color: var(--color-accent);
   text-decoration: none;
 }
 
 .register-link a:hover {
   text-decoration: underline;
+  color: var(--color-accent-hover);
 }
 </style>
 
