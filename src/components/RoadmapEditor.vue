@@ -398,11 +398,32 @@ watch(
       if (props.nodes.length > 0 || props.edges.length > 0) {
         // Network was initialized empty, now we have data - add to DataSets
         if (props.nodes.length > 0) {
-          const visNodes = props.nodes.map((n) => getVisNode(n));
+          const visNodes = props.nodes.map((n) => getVisNode(n as Node & { x?: number; y?: number }));
           // Check if DataSet is empty - if so, use add instead of update
           const existingNodes = nodesDataSet!.get() as Array<{ id: string }>;
           if (existingNodes.length === 0) {
             nodesDataSet!.add(visNodes);
+
+            // Unfix newly added nodes after initial positioning (same logic as regular updates)
+            nextTick(() => {
+              if (network && visNodes.length > 0) {
+                const updates = visNodes.map((node) => ({
+                  id: node.id,
+                  fixed: false, // Unfix so node can be moved
+                }));
+                nodesDataSet!.update(updates);
+
+                // Clean up x and y properties from node objects in the store
+                // This prevents them from being fixed again on subsequent updates
+                visNodes.forEach((visNode) => {
+                  const node = props.nodes.find((n) => n._id === visNode.id);
+                  if (node && 'x' in node && 'y' in node) {
+                    delete (node as Node & { x?: number; y?: number }).x;
+                    delete (node as Node & { x?: number; y?: number }).y;
+                  }
+                });
+              }
+            });
           } else {
             nodesDataSet!.update(visNodes);
           }
@@ -561,29 +582,28 @@ watch(
               return;
             }
 
-            // Get click coordinates from params.pointer if available, otherwise use event
-            let domX: number;
-            let domY: number;
-
-            if (params.pointer && params.pointer.DOM) {
-              // Use pointer coordinates from vis-network
-              domX = params.pointer.DOM.x;
-              domY = params.pointer.DOM.y;
+            // Get canvas coordinates directly from vis-network's click event
+            // params.pointer.canvas provides the coordinates in the network's coordinate system
+            if (params.pointer && params.pointer.canvas) {
+              // Use canvas coordinates directly - these are already in the correct coordinate system
+              emit('canvasClick', { x: params.pointer.canvas.x, y: params.pointer.canvas.y });
             } else if (params.event) {
-              // Fallback to event coordinates
+              // Fallback: convert DOM coordinates to canvas coordinates
               const event = params.event as MouseEvent;
               const rect = canvas.getBoundingClientRect();
-              domX = event.clientX - rect.left;
-              domY = event.clientY - rect.top;
+              const domX = event.clientX - rect.left;
+              const domY = event.clientY - rect.top;
+              
+              // Get the view transform from the network
+              const scale = network.getScale();
+              const viewPosition = network.getViewPosition();
+              // Convert DOM coordinates to canvas coordinates
+              const canvasX = (domX - viewPosition.x) / scale;
+              const canvasY = (domY - viewPosition.y) / scale;
+              emit('canvasClick', { x: canvasX, y: canvasY });
             } else {
               return; // No coordinates available
             }
-
-            // Convert DOM coordinates to canvas/network coordinates
-            // vis-network's coordinate system: use getPositions to understand the coordinate space
-            // For now, we'll use the canvas coordinates directly and let vis-network handle it
-            // The position will be set when we add the node to the DataSet
-            emit('canvasClick', { x: domX, y: domY });
           }
         });
       } else if (deleteMode) {
@@ -717,8 +737,19 @@ onMounted(() => {
             // If getNodeAt fails (e.g., empty graph), continue
           }
 
-          // Empty space - emit canvas click
-          emit('canvasClick', { x: domX, y: domY });
+          // Convert DOM coordinates to canvas coordinates
+          // Use vis-network's coordinate conversion
+          const scale = network.getScale();
+          const viewPosition = network.getViewPosition();
+          // The viewPosition is the center of the view in canvas coordinates
+          // We need to convert from DOM pixel coordinates to canvas coordinates
+          // Formula: canvasX = (domX - containerWidth/2) / scale + viewPosition.x
+          //          canvasY = (domY - containerHeight/2) / scale + viewPosition.y
+          const containerWidth = networkContainer.value!.clientWidth;
+          const containerHeight = networkContainer.value!.clientHeight;
+          const canvasX = (domX - containerWidth / 2) / scale + viewPosition.x;
+          const canvasY = (domY - containerHeight / 2) / scale + viewPosition.y;
+          emit('canvasClick', { x: canvasX, y: canvasY });
         }
       };
 
@@ -751,6 +782,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   min-width: 200px;
+  min-height: 400px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   background-color: #fafafa;

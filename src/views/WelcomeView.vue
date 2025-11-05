@@ -159,8 +159,10 @@ function navigateToRoadmap(roadmapId: string) {
 <style scoped>
 .welcome-container {
   padding: 2rem;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .header {
@@ -221,8 +223,9 @@ h1 {
 
 .roadmaps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1.5rem;
+  max-width: 100%;
 }
 
 .roadmap-card {

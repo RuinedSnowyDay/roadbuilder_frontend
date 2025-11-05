@@ -8,21 +8,6 @@
       <p v-if="currentRoadmap.description" class="description">
         {{ currentRoadmap.description }}
       </p>
-      <div class="stats">
-        <div class="stat-item">
-          <span class="stat-label">Nodes:</span>
-          <span class="stat-value">{{ nodes.length }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Connections:</span>
-          <span class="stat-value">{{ edges.length }}</span>
-        </div>
-        <div v-if="!isSharedRoadmap" class="stat-item">
-          <button @click="showShareDialog = true" class="share-button" title="Share this roadmap">
-            Share Roadmap
-          </button>
-        </div>
-      </div>
           <div class="main-content">
             <!-- Read-only banner for shared roadmaps -->
             <div v-if="isSharedRoadmap" class="read-only-banner">
@@ -77,6 +62,23 @@
               </div>
               <div v-if="edgeError" class="toolbar-error">
                 {{ edgeError }}
+              </div>
+              <!-- Roadmap Statistics -->
+              <div class="roadmap-stats">
+                <div class="stats-title">Roadmap Info</div>
+                <div class="stat-item">
+                  <span class="stat-label">Nodes:</span>
+                  <span class="stat-value">{{ nodes.length }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Connections:</span>
+                  <span class="stat-value">{{ edges.length }}</span>
+                </div>
+                <div v-if="!isSharedRoadmap" class="stat-item">
+                  <button @click="showShareDialog = true" class="share-button" title="Share this roadmap">
+                    Share Roadmap
+                  </button>
+                </div>
               </div>
             </div>
             <div class="graph-area">
@@ -613,20 +615,25 @@ function handleCancelShare() {
 
 <style scoped>
 .roadmap-view-container {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 1rem;
+  max-width: 100%;
+  margin: 0;
   width: 100%;
+  height: calc(100vh - 70px); /* Full viewport height minus header */
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .back-link {
   display: inline-block;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   color: #4caf50;
   text-decoration: none;
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  flex: 0 0 auto;
 }
 
 .back-link:hover {
@@ -647,28 +654,36 @@ function handleCancelShare() {
 .roadmap-info {
   width: 100%;
   box-sizing: border-box;
+  flex: 0 0 auto;
+  margin-bottom: 1rem;
 }
 
 .roadmap-info h1 {
   margin-top: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   color: #333;
-  font-size: 2rem;
+  font-size: 1.5rem;
 }
 
 .description {
   color: #666;
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
 }
 
-.stats {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 2rem;
-  padding: 1rem;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+.roadmap-stats {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.stats-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .stat-item {
@@ -676,18 +691,41 @@ function handleCancelShare() {
   flex-direction: column;
   gap: 0.25rem;
   align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.stat-item:last-child {
+  margin-bottom: 0;
 }
 
 .stat-label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #666;
   font-weight: 500;
 }
 
 .stat-value {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #333;
+}
+
+.share-button {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  margin-top: 0.5rem;
+}
+
+.share-button:hover {
+  background-color: #45a049;
 }
 
 .empty-message {
@@ -700,20 +738,24 @@ function handleCancelShare() {
 
 .main-content {
   display: flex;
-  gap: 1.5rem;
-  margin-top: 1.5rem;
-  align-items: flex-start;
+  gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
   width: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .side-toolbar {
-  min-width: 180px;
+  width: 220px;
+  flex-shrink: 0;
   background-color: #f9f9f9;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 1rem;
-  height: fit-content;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .toolbar-title {
@@ -787,24 +829,22 @@ function handleCancelShare() {
 }
 
 .graph-area {
-  flex: 1 1 0;
-  min-width: 400px; /* Minimum width to prevent collapse */
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 400px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  overflow: hidden; /* Prevent content from overflowing */
+  overflow: hidden;
+  min-height: 0;
 }
 
 .graph-container {
-  margin-top: 0;
+  flex: 1 1 auto;
   width: 100%;
-  height: 600px;
-  min-width: 200px;
+  min-height: 0;
   position: relative;
   display: flex;
   box-sizing: border-box;
-  flex-shrink: 0;
 }
 
 /* Dialog Styles */
