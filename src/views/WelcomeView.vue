@@ -1,7 +1,7 @@
 <template>
   <div class="welcome-container">
     <div class="header">
-      <h1>My Roadmaps</h1>
+      <h1>Hello, {{ currentUsername || '...' }}</h1>
       <button @click="showCreateDialog = true" class="create-button">
         + Create New Roadmap
       </button>
@@ -47,11 +47,17 @@
             v-for="roadmap in sharedRoadmaps"
             :key="roadmap._id"
             class="roadmap-card shared-roadmap"
-            @click="navigateToRoadmap(roadmap._id)"
           >
-            <h3 class="roadmap-title">{{ roadmap.title }}</h3>
-            <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
-            <span class="shared-badge">Shared</span>
+            <div class="roadmap-card-content" @click="navigateToRoadmap(roadmap._id)">
+              <h3 class="roadmap-title">{{ roadmap.title }}</h3>
+              <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+              <div class="shared-info">
+                <span class="shared-badge">Shared</span>
+                <span v-if="sharedRoadmapOwners.get(roadmap._id)" class="shared-by">
+                  by {{ sharedRoadmapOwners.get(roadmap._id) }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -135,11 +141,17 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useRoadmapStore } from '../stores/roadmap';
+import { useAuthStore } from '../stores/auth';
 import { storeToRefs } from 'pinia';
+import { callConceptQuery } from '../services/api';
 
 const router = useRouter();
 const roadmapStore = useRoadmapStore();
-const { roadmaps, sharedRoadmaps, loading, loadingShared, error } = storeToRefs(roadmapStore);
+const authStore = useAuthStore();
+const { roadmaps, sharedRoadmaps, sharedRoadmapOwners, loading, loadingShared, error } = storeToRefs(roadmapStore);
+const { currentUser } = storeToRefs(authStore);
+
+const currentUsername = ref<string>('');
 
 const showCreateDialog = ref(false);
 const newRoadmapTitle = ref('');
@@ -154,9 +166,29 @@ const showDeleteConfirm = ref(false);
 const deleting = ref(false);
 const deleteError = ref('');
 
-onMounted(() => {
+onMounted(async () => {
   roadmapStore.loadRoadmaps();
   roadmapStore.loadSharedRoadmaps();
+
+  // Load current user's username
+  if (currentUser.value) {
+    try {
+      const usernameResponse = await callConceptQuery<{ username: string }>(
+        'UserAuthentication',
+        '_getUsername',
+        { user: currentUser.value }
+      );
+
+      if (!usernameResponse.error && usernameResponse.data && usernameResponse.data.length > 0) {
+        const usernameData = usernameResponse.data[0];
+        if (usernameData?.username) {
+          currentUsername.value = usernameData.username;
+        }
+      }
+    } catch (err) {
+      console.error('Error loading username:', err);
+    }
+  }
 });
 
 async function handleCreateRoadmap() {
@@ -368,26 +400,36 @@ h1 {
 
 .shared-roadmap {
   position: relative;
-  border-color: rgba(147, 191, 178, 0.4) !important;
-  padding: 1.5rem !important;
-  cursor: pointer;
+  border-color: rgba(147, 191, 178, 0.4);
 }
 
 .shared-roadmap:hover {
-  border-color: var(--color-share) !important;
-  box-shadow: 0 4px 12px rgba(147, 191, 178, 0.2) !important;
+  border-color: var(--color-share);
+  box-shadow: 0 4px 12px rgba(147, 191, 178, 0.2);
+}
+
+.shared-info {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .shared-badge {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
+  display: inline-block;
   background-color: var(--color-share);
   color: var(--gunmetal-bg-dark);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 600;
+}
+
+.shared-by {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .roadmap-description {

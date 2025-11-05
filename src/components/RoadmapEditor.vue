@@ -197,7 +197,7 @@ function drawProgressBars(ctx: CanvasRenderingContext2D) {
     // Draw progress bar fill (rounded rectangle)
     if (progress > 0) {
       const progressWidth = (progressBarWidth * progress) / 100;
-      ctx.fillStyle = '#E9A96C';
+      ctx.fillStyle = '#93BFB2'; // Nord teal - cyan/blue-green for progress
       drawRoundedRect(ctx, progressBarX, progressBarY, progressWidth, progressBarHeight, 2);
       ctx.fill();
     }
@@ -245,8 +245,12 @@ function initializeNetwork() {
         background: '#29303E',
         border: '#E9A96C',
         highlight: {
-          background: '#3a4251',
-          border: '#E9A96C',
+          background: '#394151', // Nord blue-gray for hover background
+          border: '#6E8FB3', // Nord blue for hover border
+        },
+        hover: {
+          background: '#394151', // Nord blue-gray for hover background
+          border: '#6E8FB3', // Nord blue for hover border
         },
       },
       font: {
@@ -262,7 +266,7 @@ function initializeNetwork() {
     edges: {
       color: {
         color: '#84888F',
-        highlight: '#E9A96C',
+        highlight: '#93BFB2', // Nord teal for edge highlights
       },
       width: 2,
       smooth: {
@@ -609,7 +613,25 @@ watch(
       } else if (deleteMode) {
         networkContainer.value.style.cursor = 'not-allowed';
 
+        // Set pale red highlight colors for delete mode
         network.setOptions({
+          nodes: {
+            color: {
+              highlight: {
+                background: '#394151', // Nord blue-gray
+                border: '#D4A5A5', // Pale red for destructive actions
+              },
+              hover: {
+                background: '#394151', // Nord blue-gray
+                border: '#D4A5A5', // Pale red for destructive actions
+              },
+            },
+          },
+          edges: {
+            color: {
+              highlight: '#D4A5A5', // Pale red for edges in delete mode
+            },
+          },
           manipulation: { enabled: false },
           interaction: {
             dragNodes: true,
@@ -635,8 +657,25 @@ watch(
         // Reset connection state
         connectSourceNodeId = null;
 
-        // Set up click-to-connect edge creation
+        // Set nord blue/teal highlight colors for connect mode
         network.setOptions({
+          nodes: {
+            color: {
+              highlight: {
+                background: '#394151', // Nord blue-gray
+                border: '#93BFB2', // Nord teal for connecting
+              },
+              hover: {
+                background: '#394151', // Nord blue-gray
+                border: '#93BFB2', // Nord teal for connecting
+              },
+            },
+          },
+          edges: {
+            color: {
+              highlight: '#93BFB2', // Nord teal for edges in connect mode
+            },
+          },
           manipulation: { enabled: false }, // Disable manipulation API
           interaction: {
             dragNodes: false,
@@ -676,7 +715,25 @@ watch(
         // Reset connection state
         connectSourceNodeId = null;
 
+        // Reset to default highlight colors for select mode
         network.setOptions({
+          nodes: {
+            color: {
+              highlight: {
+                background: '#394151', // Nord blue-gray
+                border: '#6E8FB3', // Nord blue for normal hover
+              },
+              hover: {
+                background: '#394151', // Nord blue-gray
+                border: '#6E8FB3', // Nord blue for normal hover
+              },
+            },
+          },
+          edges: {
+            color: {
+              highlight: '#93BFB2', // Nord teal for edge highlights
+            },
+          },
           manipulation: { enabled: false },
           interaction: {
             dragNodes: true,

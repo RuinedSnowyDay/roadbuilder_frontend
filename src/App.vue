@@ -18,7 +18,7 @@ async function handleLogout() {
   <div class="app">
     <header v-if="isAuthenticated">
       <nav>
-        <RouterLink to="/" class="nav-link">My Roadmaps</RouterLink>
+        <RouterLink to="/" class="nav-link">Home</RouterLink>
         <button @click="handleLogout" class="logout-button">Logout</button>
       </nav>
     </header>

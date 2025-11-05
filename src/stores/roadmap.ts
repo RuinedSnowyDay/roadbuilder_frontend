@@ -18,6 +18,7 @@ import { useAuthStore } from './auth';
 export const useRoadmapStore = defineStore('roadmap', () => {
   const roadmaps = ref<AssignedObject[]>([]);
   const sharedRoadmaps = ref<AssignedObject[]>([]);
+  const sharedRoadmapOwners = ref<Map<string, string>>(new Map()); // Map of roadmap ID -> owner username
   const loading = ref(false);
   const loadingShared = ref(false);
   const error = ref<string | null>(null);
@@ -267,9 +268,47 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const assignments = await Promise.all(assignmentPromises);
       // Filter out null values and assign to sharedRoadmaps
       sharedRoadmaps.value = assignments.filter((a): a is AssignedObject => a !== null);
+
+      // Step 3: Fetch usernames for all unique owners
+      const uniqueOwnerIds = new Set<string>();
+      sharedRoadmaps.value.forEach((roadmap) => {
+        uniqueOwnerIds.add(roadmap.owner);
+      });
+
+      const usernamePromises = Array.from(uniqueOwnerIds).map(async (ownerId) => {
+        try {
+          const usernameResponse = await callConceptQuery<{ username: string }>(
+            'UserAuthentication',
+            '_getUsername',
+            { user: ownerId }
+          );
+
+          if (usernameResponse.error || !usernameResponse.data || usernameResponse.data.length === 0) {
+            return { ownerId, username: null };
+          }
+
+          const usernameData = usernameResponse.data[0];
+          return { ownerId, username: usernameData?.username || null };
+        } catch (err) {
+          console.error('Error loading username for owner:', ownerId, err);
+          return { ownerId, username: null };
+        }
+      });
+
+      const usernameResults = await Promise.all(usernamePromises);
+
+      // Map usernames to roadmaps
+      sharedRoadmapOwners.value.clear();
+      sharedRoadmaps.value.forEach((roadmap) => {
+        const usernameResult = usernameResults.find((r) => r.ownerId === roadmap.owner);
+        if (usernameResult?.username) {
+          sharedRoadmapOwners.value.set(roadmap._id, usernameResult.username);
+        }
+      });
     } catch (err) {
       console.error('Error loading shared roadmaps:', err);
       sharedRoadmaps.value = [];
+      sharedRoadmapOwners.value.clear();
     } finally {
       loadingShared.value = false;
     }
@@ -1257,6 +1296,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   return {
     roadmaps,
     sharedRoadmaps,
+    sharedRoadmapOwners,
     loading,
     loadingShared,
     error,
