@@ -190,14 +190,14 @@ function drawProgressBars(ctx: CanvasRenderingContext2D) {
     ctx.save();
 
     // Draw progress bar background (rounded rectangle)
-    ctx.fillStyle = '#e0e0e0';
+    ctx.fillStyle = '#565457';
     drawRoundedRect(ctx, progressBarX, progressBarY, progressBarWidth, progressBarHeight, 2);
     ctx.fill();
 
     // Draw progress bar fill (rounded rectangle)
     if (progress > 0) {
       const progressWidth = (progressBarWidth * progress) / 100;
-      ctx.fillStyle = '#4caf50';
+      ctx.fillStyle = '#E9A96C';
       drawRoundedRect(ctx, progressBarX, progressBarY, progressWidth, progressBarHeight, 2);
       ctx.fill();
     }
@@ -242,16 +242,16 @@ function initializeNetwork() {
       shape: 'box',
       borderWidth: 2,
       color: {
-        background: '#ffffff',
-        border: '#4caf50',
+        background: '#29303E',
+        border: '#E9A96C',
         highlight: {
-          background: '#f0f0f0',
-          border: '#45a049',
+          background: '#3a4251',
+          border: '#E9A96C',
         },
       },
       font: {
         size: 14,
-        color: '#333',
+        color: '#ffffff',
       },
       margin: { top: 12, right: 10, bottom: 20, left: 10 }, // Increased top and bottom margins to accommodate text and progress bar
       // Add custom drawing function for progress bar
@@ -261,8 +261,8 @@ function initializeNetwork() {
     },
     edges: {
       color: {
-        color: '#999',
-        highlight: '#4caf50',
+        color: '#84888F',
+        highlight: '#E9A96C',
       },
       width: 2,
       smooth: {
@@ -593,7 +593,7 @@ watch(
               const rect = canvas.getBoundingClientRect();
               const domX = event.clientX - rect.left;
               const domY = event.clientY - rect.top;
-              
+
               // Get the view transform from the network
               const scale = network.getScale();
               const viewPosition = network.getViewPosition();
@@ -783,9 +783,9 @@ onBeforeUnmount(() => {
   height: 100%;
   min-width: 200px;
   min-height: 400px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background-color: #fafafa;
+  background-color: var(--gunmetal-bg-dark);
   display: block;
   position: relative;
   box-sizing: border-box;
