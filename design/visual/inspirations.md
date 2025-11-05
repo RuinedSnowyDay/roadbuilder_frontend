@@ -1,6 +1,6 @@
 # Visual Inspirations
 
-## Navy blue workspace
+## Gunmetal workspace
 
 ![Navy blue workspace](./assets/blue_study_room.jpg)
 
