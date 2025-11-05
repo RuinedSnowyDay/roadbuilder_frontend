@@ -712,7 +712,7 @@ function handleCancelShare() {
 .share-button {
   width: 100%;
   padding: 0.75rem;
-  background-color: var(--color-accent);
+  background-color: var(--color-share);
   color: var(--gunmetal-bg-dark);
   border: none;
   border-radius: 4px;
@@ -724,7 +724,7 @@ function handleCancelShare() {
 }
 
 .share-button:hover {
-  background-color: var(--color-accent-hover);
+  background-color: var(--color-share-hover);
 }
 
 .empty-message {
@@ -999,13 +999,13 @@ function handleCancelShare() {
   font-size: 1rem;
   cursor: pointer;
   font-weight: 500;
-  background-color: #ff6b6b;
-  color: white;
+  background-color: var(--color-destructive);
+  color: var(--gunmetal-bg-dark);
   transition: background-color 0.2s;
 }
 
 .delete-button:hover:not(:disabled) {
-  background-color: #ff5252;
+  background-color: var(--color-destructive-hover);
 }
 
 .delete-button:disabled {

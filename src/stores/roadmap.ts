@@ -81,6 +81,75 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   }
 
   /**
+   * Deletes a roadmap
+   * @param roadmapId - The ID of the roadmap (AssignedObject) to delete
+   * @returns Error message if failed, null on success
+   */
+  async function deleteRoadmap(roadmapId: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    if (!authStore.currentUser) {
+      return 'User not authenticated';
+    }
+
+    // Find the roadmap in the user's roadmaps
+    const roadmap = roadmaps.value.find((r) => r._id === roadmapId);
+    if (!roadmap) {
+      return 'Roadmap not found';
+    }
+
+    // Verify the user owns this roadmap
+    if (roadmap.owner !== authStore.currentUser) {
+      return 'You can only delete your own roadmaps';
+    }
+
+    try {
+      // Step 1: Delete the underlying graph
+      const deleteGraphResponse = await callConceptAction<Record<string, never>>(
+        'EnrichedDAG',
+        'deleteGraph',
+        {
+          graph: roadmap.object,
+        }
+      );
+
+      if (deleteGraphResponse.error) {
+        return deleteGraphResponse.error;
+      }
+
+      // Step 2: Delete the AssignedObject
+      const deleteAssignedObjectResponse = await callConceptAction<Record<string, never>>(
+        'ObjectManager',
+        'deleteAssignedObject',
+        {
+          owner: authStore.currentUser,
+          title: roadmap.title,
+        }
+      );
+
+      if (deleteAssignedObjectResponse.error) {
+        return deleteAssignedObjectResponse.error;
+      }
+
+      // Remove from local state
+      roadmaps.value = roadmaps.value.filter((r) => r._id !== roadmapId);
+
+      // If this was the currently loaded roadmap, clear it
+      if (currentRoadmap.value?._id === roadmapId) {
+        currentRoadmap.value = null;
+        currentGraphId.value = null;
+        nodes.value = [];
+        edges.value = [];
+        selectedNode.value = null;
+        nodeResources.value = [];
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to delete roadmap';
+    }
+  }
+
+  /**
    * Shares a roadmap with another user by username
    * @param username - The username of the user to share with
    * @returns Error message if failed, null on success
@@ -1200,6 +1269,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     loadRoadmaps,
     loadSharedRoadmaps,
     createRoadmap,
+    deleteRoadmap,
     shareRoadmap,
     loadRoadmap,
     addNode,
