@@ -72,7 +72,6 @@
                 @change="handleToggleResource(resource.resource)"
                 @click.stop
                 class="resource-checkbox"
-                :disabled="isSharedRoadmap"
                 title="Mark as complete"
               />
               <div
@@ -395,9 +394,9 @@ async function loadResourceCheckIfNeeded(resourceId: string) {
 }
 
 async function handleToggleResource(resourceId: string) {
-  if (isSharedRoadmap.value) return;
-  
   // Load check if not cached
+  // Note: Checks are user-specific, so each user can have their own check for the same resource
+  // This works even for shared roadmaps - each user tracks their own progress
   if (!resourceChecks.value.has(resourceId)) {
     await roadmapStore.loadResourceCheck(resourceId);
   }
