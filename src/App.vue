@@ -63,7 +63,7 @@ nav {
   padding: 0.5rem 1rem;
   background-color: transparent;
   color: var(--color-text);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-destructive);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
@@ -71,9 +71,9 @@ nav {
 }
 
 .logout-button:hover {
-  background-color: rgba(233, 169, 108, 0.1);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  background-color: rgba(212, 165, 165, 0.15);
+  border-color: var(--color-destructive-hover);
+  color: var(--color-destructive-hover);
 }
 
 main {

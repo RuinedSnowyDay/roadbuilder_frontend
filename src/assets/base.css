@@ -7,6 +7,18 @@
   --gunmetal-bg: #29303E;             /* Very dark deep navy blue - primary backgrounds */
   --gunmetal-bg-dark: #191A20;       /* Very dark almost pure black - deepest backgrounds */
 
+  /* Nord palette colors */
+  --nord-dark-navy: #161B21;         /* Dark navy blue - darkest tone */
+  --nord-pale-yellow: #EBCB8B;        /* Muted pale yellow - warm accent */
+  --nord-teal: #93BFB2;               /* Muted teal/light blue-green - sharing buttons */
+  --nord-blue: #6E8FB3;               /* Muted medium blue - sharing buttons */
+  --nord-blue-gray: #394151;          /* Dark muted blue-gray - borders/backgrounds */
+
+  /* Destructive actions - pale red */
+  --color-destructive: #D4A5A5;       /* Pale muted red - logout, delete actions */
+  --color-destructive-hover: #C98A8A; /* Darker pale red for hover */
+  --color-destructive-bright: #ff6b6b; /* Bright red for errors/warnings */
+
   /* Semantic color variables */
   --color-background: var(--gunmetal-bg-dark);
   --color-background-soft: var(--gunmetal-bg);
@@ -22,6 +34,10 @@
 
   --color-accent: var(--gunmetal-accent);
   --color-accent-hover: #d8965a;
+
+  /* Sharing buttons - use nord cyan/blue colors */
+  --color-share: var(--nord-teal);
+  --color-share-hover: var(--nord-blue);
 
   --section-gap: 160px;
 }

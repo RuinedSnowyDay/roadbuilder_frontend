@@ -22,10 +22,18 @@
             v-for="roadmap in roadmaps"
             :key="roadmap._id"
             class="roadmap-card"
-            @click="navigateToRoadmap(roadmap._id)"
           >
-            <h3 class="roadmap-title">{{ roadmap.title }}</h3>
-            <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+            <div class="roadmap-card-content" @click="navigateToRoadmap(roadmap._id)">
+              <h3 class="roadmap-title">{{ roadmap.title }}</h3>
+              <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+            </div>
+            <button
+              @click.stop="handleDeleteRoadmap(roadmap)"
+              class="delete-roadmap-button"
+              title="Delete roadmap"
+            >
+              🗑️
+            </button>
           </div>
         </div>
       </div>
@@ -92,6 +100,34 @@
         </form>
       </div>
     </div>
+
+    <!-- Delete Roadmap Confirmation Dialog -->
+    <div v-if="showDeleteConfirm" class="dialog-overlay" @click="handleCancelDelete">
+      <div class="dialog-content" @click.stop>
+        <h2>Delete Roadmap</h2>
+        <p>Are you sure you want to delete "<strong>{{ deletingRoadmapTitle }}</strong>"?</p>
+        <p class="warning-text">This action cannot be undone. All nodes, connections, and resources will be permanently deleted.</p>
+        <div v-if="deleteError" class="error-message">{{ deleteError }}</div>
+        <div class="dialog-actions">
+          <button
+            type="button"
+            @click="handleCancelDelete"
+            :disabled="deleting"
+            class="cancel-button"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            @click="handleConfirmDelete"
+            :disabled="deleting"
+            class="delete-button"
+          >
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -110,6 +146,13 @@ const newRoadmapTitle = ref('');
 const newRoadmapDescription = ref('');
 const creating = ref(false);
 const createError = ref('');
+
+// Delete roadmap state
+const deletingRoadmapId = ref<string | null>(null);
+const deletingRoadmapTitle = ref('');
+const showDeleteConfirm = ref(false);
+const deleting = ref(false);
+const deleteError = ref('');
 
 onMounted(() => {
   roadmapStore.loadRoadmaps();
@@ -153,6 +196,51 @@ async function handleCreateRoadmap() {
 
 function navigateToRoadmap(roadmapId: string) {
   router.push(`/roadmap/${roadmapId}`);
+}
+
+function handleDeleteRoadmap(roadmap: { _id: string; title: string }) {
+  deletingRoadmapId.value = roadmap._id;
+  deletingRoadmapTitle.value = roadmap.title;
+  showDeleteConfirm.value = true;
+  deleteError.value = '';
+}
+
+function handleCancelDelete() {
+  showDeleteConfirm.value = false;
+  deletingRoadmapId.value = null;
+  deletingRoadmapTitle.value = '';
+  deleteError.value = '';
+}
+
+async function handleConfirmDelete() {
+  if (!deletingRoadmapId.value) {
+    return;
+  }
+
+  deleting.value = true;
+  deleteError.value = '';
+
+  try {
+    const error = await roadmapStore.deleteRoadmap(deletingRoadmapId.value);
+    if (error) {
+      deleteError.value = error;
+    } else {
+      // Success - close dialog
+      showDeleteConfirm.value = false;
+      deletingRoadmapId.value = null;
+      deletingRoadmapTitle.value = '';
+
+      // If we're currently viewing this roadmap, navigate back to home
+      const roadmapId = deletingRoadmapId.value;
+      if (router.currentRoute.value.params.id === roadmapId) {
+        router.push('/');
+      }
+    }
+  } catch (err) {
+    deleteError.value = err instanceof Error ? err.message : 'Failed to delete roadmap';
+  } finally {
+    deleting.value = false;
+  }
 }
 </script>
 
@@ -233,15 +321,42 @@ h1 {
   background: var(--gunmetal-bg);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 1.5rem;
-  cursor: pointer;
+  padding: 0;
+  position: relative;
   transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  display: flex;
+  overflow: hidden;
 }
 
 .roadmap-card:hover {
   box-shadow: 0 4px 12px rgba(233, 169, 108, 0.2);
   transform: translateY(-2px);
   border-color: var(--color-accent);
+}
+
+.roadmap-card-content {
+  flex: 1;
+  padding: 1.5rem;
+  cursor: pointer;
+}
+
+.delete-roadmap-button {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  color: var(--color-text);
+}
+
+.delete-roadmap-button:hover {
+  background-color: rgba(244, 67, 54, 0.1);
 }
 
 .roadmap-title {
@@ -253,13 +368,21 @@ h1 {
 
 .shared-roadmap {
   position: relative;
+  border-color: rgba(147, 191, 178, 0.4) !important;
+  padding: 1.5rem !important;
+  cursor: pointer;
+}
+
+.shared-roadmap:hover {
+  border-color: var(--color-share) !important;
+  box-shadow: 0 4px 12px rgba(147, 191, 178, 0.2) !important;
 }
 
 .shared-badge {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  background-color: var(--color-accent);
+  background-color: var(--color-share);
   color: var(--gunmetal-bg-dark);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -400,6 +523,27 @@ h1 {
   background-color: var(--gunmetal-secondary);
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.delete-button {
+  background-color: #f44336;
+  color: white;
+}
+
+.delete-button:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.delete-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.warning-text {
+  color: #f44336;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
 }
 </style>
 

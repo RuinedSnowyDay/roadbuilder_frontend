@@ -758,7 +758,7 @@ function handleCancelEditResource() {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #ff6b6b;
+  color: var(--color-destructive);
   cursor: pointer;
   padding: 0;
   width: 24px;
@@ -773,8 +773,8 @@ function handleCancelEditResource() {
 }
 
 .delete-resource-button:hover {
-  background-color: rgba(255, 107, 107, 0.15);
-  color: #ff5252;
+  background-color: rgba(212, 165, 165, 0.15);
+  color: var(--color-destructive-hover);
 }
 
 .delete-resource-button:disabled {
