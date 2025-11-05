@@ -244,10 +244,20 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       return 'User not authenticated';
     }
 
+    // Check for duplicate titles in the frontend (only check against currently existing nodes)
+    const trimmedTitle = nodeTitle.trim();
+    const duplicate = nodes.value.find((n) => n.title === trimmedTitle);
+    if (duplicate) {
+      return 'A node with this title already exists';
+    }
+
     try {
       // Step 1: Create a ResourceList for the node's enrichment
       // This will be used later to store resources for the node
-      const resourceListTitle = `Resources for ${nodeTitle}`;
+      // Include roadmap title to ensure uniqueness across different roadmaps
+      // ResourceList uniqueness is per (owner, listTitle), so we need to make titles unique per roadmap
+      const roadmapTitle = currentRoadmap.value?.title || 'Untitled Roadmap';
+      const resourceListTitle = `${roadmapTitle} - Resources for ${nodeTitle}`;
       const resourceListResponse = await callConceptAction<CreateResourceListResponse>(
         'ResourceList',
         'createResourceList',
@@ -363,20 +373,60 @@ export const useRoadmapStore = defineStore('roadmap', () => {
    * @returns Error message or null on success
    */
   async function deleteNode(nodeId: string): Promise<string | null> {
+    if (!currentGraphId.value) {
+      return 'No roadmap loaded';
+    }
+
+    const node = nodes.value.find((n) => n._id === nodeId);
+    if (!node) {
+      return 'Node not found';
+    }
+
     try {
-      const response = await callConceptAction('EnrichedDAG', 'removeNode', {
+      // Call the backend API to remove the node
+      // According to API spec: POST /api/EnrichedDAG/removeNode with body { "node": "ID" }
+      const response = await callConceptAction<Record<string, never>>('EnrichedDAG', 'removeNode', {
         node: nodeId,
       });
 
       if (response.error) {
+        // Backend returned an error - don't update local state
+        console.error('deleteNode: Backend error:', response.error);
         return response.error;
       }
 
-      // Optimistically update the graph - remove node and connected edges from local state
+      // Success - backend confirmed deletion (response.data should be {} or empty object)
+      // The API spec says removeNode returns {} on success
+      // If response.error is undefined, we consider it a success
+
+      // Backend confirmed deletion - now delete the associated ResourceList
+      // The ResourceList was created when the node was added, so we need to clean it up
+      if (node.enrichment) {
+        const deleteResourceListResponse = await callConceptAction<Record<string, never>>(
+          'ResourceList',
+          'deleteResourceList',
+          {
+            resourceList: node.enrichment,
+          }
+        );
+
+        if (deleteResourceListResponse.error) {
+          // Log the error but don't fail the node deletion
+          // The node is already deleted, so we'll just log this
+          console.error('deleteNode: Failed to delete ResourceList:', deleteResourceListResponse.error);
+        }
+      }
+
+      // Update local state - remove node and connected edges
       nodes.value = nodes.value.filter((n) => n._id !== nodeId);
       edges.value = edges.value.filter(
         (e) => e.source !== nodeId && e.target !== nodeId
       );
+
+      // Also clean up resources cache for this node's ResourceList
+      if (node.enrichment) {
+        allNodeResources.value.delete(node.enrichment);
+      }
 
       return null; // Success
     } catch (err) {

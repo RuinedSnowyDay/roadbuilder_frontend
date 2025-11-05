@@ -378,12 +378,22 @@ watch(
     // Find nodes to add
     const nodesToAdd = props.nodes
       .filter((n) => !previousNodes.has(n._id))
-      .map((n) => getVisNode(n as Node & { x?: number; y?: number }));
+      .map((n) => {
+        const visNode = getVisNode(n as Node & { x?: number; y?: number });
+        // Newly added nodes with coordinates should be fixed initially
+        // We'll unfix them after a short delay to allow positioning
+        return visNode;
+      });
 
-    // Find nodes to update (title changes)
+    // Find nodes to update (title changes, but don't fix position again)
     const nodesToUpdate = props.nodes
       .filter((n) => previousNodes.has(n._id))
-      .map((n) => getVisNode(n));
+      .map((n) => {
+        const visNode = getVisNode(n);
+        // Remove fixed property for existing nodes - they should be movable
+        delete visNode.fixed;
+        return visNode;
+      });
 
     // Find nodes to remove
     const nodesToRemove = Array.from(previousNodes).filter(
@@ -415,6 +425,29 @@ watch(
     // Apply incremental updates to DataSets
     if (nodesToAdd.length > 0) {
       nodesDataSet.add(nodesToAdd);
+
+      // Unfix newly added nodes after a short delay so they can be moved
+      // This allows the node to be positioned initially, then become movable
+      nextTick(() => {
+        if (network && nodesToAdd.length > 0) {
+          // Unfix all newly added nodes after they're positioned
+          const updates = nodesToAdd.map((node) => ({
+            id: node.id,
+            fixed: false, // Unfix so node can be moved
+          }));
+          nodesDataSet!.update(updates);
+
+          // Clean up x and y properties from node objects in the store
+          // This prevents them from being fixed again on subsequent updates
+          nodesToAdd.forEach((visNode) => {
+            const node = props.nodes.find((n) => n._id === visNode.id);
+            if (node && 'x' in node && 'y' in node) {
+              delete (node as Node & { x?: number; y?: number }).x;
+              delete (node as Node & { x?: number; y?: number }).y;
+            }
+          });
+        }
+      });
     }
     if (nodesToUpdate.length > 0) {
       nodesDataSet.update(nodesToUpdate);
@@ -457,14 +490,13 @@ watch(
       network.off('click');
 
       if (addNodeMode) {
-        console.log('Entering add node mode');
         networkContainer.value.style.cursor = 'crosshair';
 
         network.setOptions({
           manipulation: { enabled: false },
           interaction: {
             dragNodes: false,
-            dragView: true, // Keep view dragging enabled - clicks should still work
+            dragView: false, // Disable view dragging to prevent interference with clicks
             selectConnectedEdges: false,
             selectable: false, // Disable node selection
           },
@@ -472,13 +504,10 @@ watch(
 
         // Handle clicks on canvas (empty space) to add node at that position
         network.on('click', (params) => {
-          console.log('Add node mode click:', params);
-
           // Only handle clicks on empty canvas (not on nodes or edges)
           if (params.nodes.length === 0 && params.edges.length === 0) {
             const canvas = networkContainer.value;
             if (!canvas || !network) {
-              console.log('Missing canvas or network');
               return;
             }
 
@@ -490,16 +519,13 @@ watch(
               // Use pointer coordinates from vis-network
               domX = params.pointer.DOM.x;
               domY = params.pointer.DOM.y;
-              console.log('Using pointer.DOM:', { x: domX, y: domY });
             } else if (params.event) {
               // Fallback to event coordinates
               const event = params.event as MouseEvent;
               const rect = canvas.getBoundingClientRect();
               domX = event.clientX - rect.left;
               domY = event.clientY - rect.top;
-              console.log('Using event coordinates:', { x: domX, y: domY });
             } else {
-              console.log('No coordinates available in params');
               return; // No coordinates available
             }
 
@@ -507,10 +533,7 @@ watch(
             // vis-network's coordinate system: use getPositions to understand the coordinate space
             // For now, we'll use the canvas coordinates directly and let vis-network handle it
             // The position will be set when we add the node to the DataSet
-            console.log('Emitting canvasClick with coordinates:', { x: domX, y: domY });
             emit('canvasClick', { x: domX, y: domY });
-          } else {
-            console.log('Click was on node or edge, ignoring');
           }
         });
       } else if (deleteMode) {
@@ -608,24 +631,36 @@ onMounted(() => {
     // The watch will fire on initial props, but we need to ensure isInitialLoad is handled correctly
     // The watch itself will set isInitialLoad to false on first run
 
-    // Also set up a direct click handler on the container for empty graphs
+    // Also set up a direct click handler on the container as a fallback
+    // This will work even when vis-network doesn't fire click events (e.g., empty graphs)
     if (networkContainer.value) {
-      networkContainer.value.addEventListener('click', (event) => {
+      const containerClickHandler = (event: MouseEvent) => {
         if (props.addNodeMode && network) {
-          // Only handle if network click didn't fire (empty graph case)
           // Check if this is a click on empty space
           const rect = networkContainer.value!.getBoundingClientRect();
           const domX = event.clientX - rect.left;
           const domY = event.clientY - rect.top;
 
           // Check if click is on any node using getNodeAt
-          const nodeAt = network.getNodeAt({ x: domX, y: domY });
-          if (!nodeAt) {
-            console.log('Direct container click handler - empty space');
-            emit('canvasClick', { x: domX, y: domY });
+          try {
+            const nodeAt = network.getNodeAt({ x: domX, y: domY });
+            if (nodeAt) {
+              // Clicked on a node, ignore
+              return;
+            }
+          } catch {
+            // If getNodeAt fails (e.g., empty graph), continue
           }
+
+          // Empty space - emit canvas click
+          emit('canvasClick', { x: domX, y: domY });
         }
-      });
+      };
+
+      networkContainer.value.addEventListener('click', containerClickHandler);
+
+      // Store handler for cleanup
+      (networkContainer.value as HTMLElement & { __clickHandler?: (event: MouseEvent) => void }).__clickHandler = containerClickHandler;
     }
   });
 });
@@ -634,6 +669,10 @@ onBeforeUnmount(() => {
   if (network) {
     network.destroy();
     network = null;
+  }
+  // Clean up direct event listener
+  if (networkContainer.value && (networkContainer.value as HTMLElement & { __clickHandler?: (event: MouseEvent) => void }).__clickHandler) {
+    networkContainer.value.removeEventListener('click', (networkContainer.value as HTMLElement & { __clickHandler?: (event: MouseEvent) => void }).__clickHandler!);
   }
 });
 </script>

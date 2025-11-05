@@ -91,6 +91,44 @@
             <NodeContentPanel />
           </div>
 
+      <!-- Add Node Dialog -->
+      <div
+        v-if="showAddNodeDialog"
+        class="dialog-overlay"
+        @click="handleCancelAddNode"
+      >
+        <div class="dialog-content" @click.stop>
+          <h2>Add New Node</h2>
+          <form @submit.prevent="handleAddNode">
+            <div class="form-group">
+              <label for="add-node-title">Node Title *</label>
+              <input
+                id="add-node-title"
+                v-model="newNodeTitle"
+                type="text"
+                required
+                placeholder="Enter node title"
+                :disabled="addingNode"
+                autofocus
+              />
+            </div>
+            <div v-if="addNodeError" class="error-message">{{ addNodeError }}</div>
+            <div class="dialog-actions">
+              <button
+                type="button"
+                @click="handleCancelAddNode"
+                :disabled="addingNode"
+                class="cancel-button"
+              >
+                Cancel
+              </button>
+              <button type="submit" :disabled="addingNode" class="submit-button">
+                {{ addingNode ? 'Adding...' : 'Add Node' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <!-- Edit Node Dialog -->
       <div
@@ -213,6 +251,8 @@ const actionMode = ref<'add' | 'delete' | 'connect' | 'select'>('select');
 const newNodeTitle = ref('');
 const addingNode = ref(false);
 const addNodeError = ref('');
+const showAddNodeDialog = ref(false);
+const pendingNodePosition = ref<{ x: number; y: number } | null>(null);
 
 // Edit node dialog
 const showEditNodeDialog = ref(false);
@@ -248,8 +288,14 @@ onMounted(async () => {
   }
 });
 
-async function handleAddNode(title: string, x?: number, y?: number) {
-  if (!title.trim()) {
+async function handleAddNode() {
+  if (!newNodeTitle.value.trim()) {
+    addNodeError.value = 'Node title is required';
+    return;
+  }
+
+  if (!pendingNodePosition.value) {
+    addNodeError.value = 'No position provided';
     return;
   }
 
@@ -257,38 +303,45 @@ async function handleAddNode(title: string, x?: number, y?: number) {
   addNodeError.value = '';
 
   try {
-    const error = await roadmapStore.addNode(title.trim(), x, y);
+    const error = await roadmapStore.addNode(
+      newNodeTitle.value.trim(),
+      pendingNodePosition.value.x,
+      pendingNodePosition.value.y
+    );
     if (error) {
       addNodeError.value = error;
-      alert(`Failed to add node: ${error}`);
     } else {
       // Success - reset form and exit add mode
       newNodeTitle.value = '';
+      showAddNodeDialog.value = false;
+      pendingNodePosition.value = null;
       actionMode.value = 'select';
     }
   } catch (err) {
     addNodeError.value = err instanceof Error ? err.message : 'Failed to add node';
-    alert(`Failed to add node: ${addNodeError.value}`);
   } finally {
     addingNode.value = false;
   }
 }
 
+function handleCancelAddNode() {
+  showAddNodeDialog.value = false;
+  pendingNodePosition.value = null;
+  newNodeTitle.value = '';
+  addNodeError.value = '';
+  actionMode.value = 'select';
+}
+
 function handleCanvasClick(position: { x: number; y: number }) {
-  console.log('Canvas click received:', position);
   if (actionMode.value !== 'add') {
-    console.log('Not in add mode, ignoring');
     return;
   }
 
-  // Prompt for node title
-  const title = prompt('Enter node title:');
-  console.log('User entered title:', title);
-  if (title && title.trim()) {
-    handleAddNode(title.trim(), position.x, position.y);
-  } else {
-    console.log('No title provided, cancelling');
-  }
+  // Store position and show dialog
+  pendingNodePosition.value = position;
+  newNodeTitle.value = '';
+  addNodeError.value = '';
+  showAddNodeDialog.value = true;
 }
 
 function handleNodeDoubleClick(nodeId: string) {
