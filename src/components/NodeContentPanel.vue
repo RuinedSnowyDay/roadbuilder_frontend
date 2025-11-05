@@ -20,6 +20,7 @@
               type="text"
               class="title-input"
               :class="{ 'error': hasDuplicateError }"
+              :disabled="isSharedRoadmap"
               @blur="handleTitleBlur"
               @keyup.enter="handleTitleSubmit"
               @keyup.esc="handleTitleCancel"
@@ -35,6 +36,7 @@
           <div class="resources-header">
             <h3 class="resources-title">Resources</h3>
             <button
+              v-if="!isSharedRoadmap"
               @click="showAddResourceDialog = true"
               class="add-resource-button"
               title="Add Resource"
@@ -53,7 +55,7 @@
               :key="resource._id"
               class="resource-item"
               :class="{ 'dragging': draggingIndex === index, 'drag-over': dragOverIndex === index }"
-              draggable="true"
+              :draggable="!isSharedRoadmap"
               @dragstart="handleDragStart($event, index)"
               @dragend="handleDragEnd"
               @dragover.prevent="handleDragOver($event, index)"
@@ -70,6 +72,7 @@
                 @change="handleToggleResource(resource.resource)"
                 @click.stop
                 class="resource-checkbox"
+                :disabled="isSharedRoadmap"
                 title="Mark as complete"
               />
               <div
@@ -82,6 +85,7 @@
                 <div class="resource-title">{{ resource.title }}</div>
               </div>
               <button
+                v-if="!isSharedRoadmap"
                 @click.stop="handleDeleteResource(index)"
                 class="delete-resource-button"
                 title="Delete Resource"
@@ -99,6 +103,7 @@
             :resource-id="editingResource._id"
             :resource-title="editingResource.title"
             :initial-content="editingResourceContent"
+            :read-only="isSharedRoadmap"
             @save="handleSaveResourceContent"
             @cancel="handleCancelEditResource"
           />
@@ -155,7 +160,7 @@ import MarkdownEditor from './MarkdownEditor.vue';
 import type { IndexedResource } from '../services/types';
 
 const roadmapStore = useRoadmapStore();
-const { selectedNode, nodeResources, loadingResources, error, nodes, resourceChecks } = storeToRefs(roadmapStore);
+const { selectedNode, nodeResources, loadingResources, error, nodes, resourceChecks, isSharedRoadmap } = storeToRefs(roadmapStore);
 
 const resources = computed(() => nodeResources.value);
 const resourcesError = computed(() => error.value);
@@ -206,7 +211,7 @@ function checkDuplicateTitle(title: string): boolean {
 }
 
 async function handleTitleSubmit() {
-  if (!selectedNode.value) return;
+  if (!selectedNode.value || isSharedRoadmap.value) return;
 
   const newTitle = editingTitle.value.trim();
   if (newTitle === originalTitle.value) {
@@ -258,6 +263,8 @@ function handleTitleCancel() {
 }
 
 async function handleAddResource() {
+  if (isSharedRoadmap.value) return;
+  
   if (!newResourceTitle.value.trim()) {
     addResourceError.value = 'Resource title is required';
     return;
@@ -290,6 +297,8 @@ function handleCancelAddResource() {
 }
 
 async function handleDeleteResource(index: number) {
+  if (isSharedRoadmap.value) return;
+  
   if (confirm(`Are you sure you want to delete "${resources.value[index]?.title}"?`)) {
     deletingResourceIndex.value = index;
     const resourceToDelete = resources.value[index];
@@ -351,6 +360,8 @@ function handleDragLeave() {
 
 async function handleDrop(event: DragEvent, toIndex: number) {
   event.preventDefault();
+  
+  if (isSharedRoadmap.value) return;
 
   if (draggingIndex.value === null || draggingIndex.value === toIndex) {
     dragOverIndex.value = null;
@@ -384,6 +395,8 @@ async function loadResourceCheckIfNeeded(resourceId: string) {
 }
 
 async function handleToggleResource(resourceId: string) {
+  if (isSharedRoadmap.value) return;
+  
   // Load check if not cached
   if (!resourceChecks.value.has(resourceId)) {
     await roadmapStore.loadResourceCheck(resourceId);
@@ -412,7 +425,7 @@ async function handleResourceClick(resource: IndexedResource) {
 }
 
 async function handleSaveResourceContent(content: string) {
-  if (!editingResource.value) {
+  if (!editingResource.value || isSharedRoadmap.value) {
     return;
   }
 

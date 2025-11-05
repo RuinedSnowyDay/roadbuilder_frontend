@@ -9,19 +9,43 @@
 
     <div v-if="loading" class="loading">Loading roadmaps...</div>
     <div v-else-if="error" class="error">Error: {{ error }}</div>
-    <div v-else-if="roadmaps.length === 0" class="empty-state">
+    <div v-else-if="roadmaps.length === 0 && sharedRoadmaps.length === 0" class="empty-state">
       <p>You don't have any roadmaps yet.</p>
       <p>Click "Create New Roadmap" to get started!</p>
     </div>
-    <div v-else class="roadmaps-grid">
-      <div
-        v-for="roadmap in roadmaps"
-        :key="roadmap._id"
-        class="roadmap-card"
-        @click="navigateToRoadmap(roadmap._id)"
-      >
-        <h2 class="roadmap-title">{{ roadmap.title }}</h2>
-        <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+    <div v-else>
+      <!-- My Roadmaps Section -->
+      <div v-if="roadmaps.length > 0">
+        <h2 class="section-title">My Roadmaps</h2>
+        <div class="roadmaps-grid">
+          <div
+            v-for="roadmap in roadmaps"
+            :key="roadmap._id"
+            class="roadmap-card"
+            @click="navigateToRoadmap(roadmap._id)"
+          >
+            <h3 class="roadmap-title">{{ roadmap.title }}</h3>
+            <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shared Roadmaps Section -->
+      <div v-if="loadingShared" class="loading">Loading shared roadmaps...</div>
+      <div v-else-if="sharedRoadmaps.length > 0">
+        <h2 class="section-title">Shared with Me</h2>
+        <div class="roadmaps-grid">
+          <div
+            v-for="roadmap in sharedRoadmaps"
+            :key="roadmap._id"
+            class="roadmap-card shared-roadmap"
+            @click="navigateToRoadmap(roadmap._id)"
+          >
+            <h3 class="roadmap-title">{{ roadmap.title }}</h3>
+            <p class="roadmap-description">{{ roadmap.description || 'No description' }}</p>
+            <span class="shared-badge">Shared</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -79,7 +103,7 @@ import { storeToRefs } from 'pinia';
 
 const router = useRouter();
 const roadmapStore = useRoadmapStore();
-const { roadmaps, loading, error } = storeToRefs(roadmapStore);
+const { roadmaps, sharedRoadmaps, loading, loadingShared, error } = storeToRefs(roadmapStore);
 
 const showCreateDialog = ref(false);
 const newRoadmapTitle = ref('');
@@ -89,6 +113,7 @@ const createError = ref('');
 
 onMounted(() => {
   roadmapStore.loadRoadmaps();
+  roadmapStore.loadSharedRoadmaps();
 });
 
 async function handleCreateRoadmap() {
@@ -149,6 +174,13 @@ h1 {
   margin: 0;
   color: #333;
   font-size: 2rem;
+}
+
+.section-title {
+  margin: 2rem 0 1rem 0;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: 600;
 }
 
 .create-button {
@@ -212,6 +244,22 @@ h1 {
   color: #333;
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.shared-roadmap {
+  position: relative;
+}
+
+.shared-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background-color: #2196f3;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .roadmap-description {

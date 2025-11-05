@@ -212,6 +212,20 @@ function initializeNetwork() {
     return;
   }
 
+  // Ensure the container has explicit dimensions
+  const container = networkContainer.value;
+  if (container.parentElement) {
+    const parentWidth = container.parentElement.clientWidth;
+    const parentHeight = container.parentElement.clientHeight || 600;
+    // Always set explicit dimensions to ensure vis-network sizes correctly
+    container.style.width = `${Math.max(parentWidth, 400)}px`;
+    container.style.height = `${Math.max(parentHeight, 600)}px`;
+  } else {
+    // Fallback if parent isn't available yet
+    container.style.width = '100%';
+    container.style.height = '600px';
+  }
+
   const data = getVisNetworkData();
 
   // Create DataSets for incremental updates
@@ -283,13 +297,27 @@ function initializeNetwork() {
 
   network = new Network(networkContainer.value, networkData, options);
 
+  // Force network to resize to container after creation
+  if (network && networkContainer.value) {
+    nextTick(() => {
+      network?.setSize(`${networkContainer.value!.clientWidth}px`, `${networkContainer.value!.clientHeight || 600}px`);
+      network?.redraw();
+    });
+  }
+
   // Set initial state tracking immediately after network creation
-  // This prevents the watch from treating the first prop change as "initial load"
+  // Track what was actually loaded into the network
   previousNodes = new Set(props.nodes.map((n) => n._id));
   previousEdges = new Set(
     props.edges.map((e) => `${e.source}-${e.target}`)
   );
-  isInitialLoad = false;
+
+  // Only set isInitialLoad to false if we actually have data
+  // If network was initialized with empty data, keep isInitialLoad true
+  // so the watch can handle the first data load properly
+  if (props.nodes.length > 0 || props.edges.length > 0) {
+    isInitialLoad = false;
+  }
 
   // Register custom node rendering with progress bar using afterDrawing event
   if (network) {
@@ -366,12 +394,34 @@ watch(
     );
 
     if (isInitialLoad) {
-      // First load - just track state and ensure network is ready
+      // First load of actual data - update the DataSets if network was initialized empty
+      if (props.nodes.length > 0 || props.edges.length > 0) {
+        // Network was initialized empty, now we have data - add to DataSets
+        if (props.nodes.length > 0) {
+          const visNodes = props.nodes.map((n) => getVisNode(n));
+          // Check if DataSet is empty - if so, use add instead of update
+          const existingNodes = nodesDataSet!.get() as Array<{ id: string }>;
+          if (existingNodes.length === 0) {
+            nodesDataSet!.add(visNodes);
+          } else {
+            nodesDataSet!.update(visNodes);
+          }
+        }
+        if (props.edges.length > 0) {
+          const visEdges = props.edges.map((e) => getVisEdge(e));
+          edgesDataSet!.add(visEdges);
+          nextTick(() => {
+            if (network) {
+              network.redraw();
+            }
+          });
+        }
+      }
+
+      // Track state and mark as no longer initial load
       previousNodes = currentNodes;
       previousEdges = currentEdges;
       isInitialLoad = false;
-      // Don't return early - allow the network to process initial data
-      // The initial data is already in the DataSets from initializeNetwork
       return;
     }
 
@@ -625,6 +675,21 @@ watch(
 
 onMounted(() => {
   initializeNetwork();
+
+  // Set up resize observer to handle container size changes
+  if (networkContainer.value && window.ResizeObserver) {
+    const resizeObserver = new ResizeObserver(() => {
+      if (network && networkContainer.value) {
+        network.setSize(`${networkContainer.value.clientWidth}px`, `${networkContainer.value.clientHeight || 600}px`);
+        network.redraw();
+      }
+    });
+    resizeObserver.observe(networkContainer.value);
+
+    // Store observer for cleanup
+    (networkContainer.value as HTMLElement & { __resizeObserver?: ResizeObserver }).__resizeObserver = resizeObserver;
+  }
+
   // After network is initialized, mark initial load as complete
   // This ensures the watch can properly track changes
   nextTick(() => {
@@ -674,21 +739,36 @@ onBeforeUnmount(() => {
   if (networkContainer.value && (networkContainer.value as HTMLElement & { __clickHandler?: (event: MouseEvent) => void }).__clickHandler) {
     networkContainer.value.removeEventListener('click', (networkContainer.value as HTMLElement & { __clickHandler?: (event: MouseEvent) => void }).__clickHandler!);
   }
+  // Clean up resize observer
+  if (networkContainer.value && (networkContainer.value as HTMLElement & { __resizeObserver?: ResizeObserver }).__resizeObserver) {
+    (networkContainer.value as HTMLElement & { __resizeObserver?: ResizeObserver }).__resizeObserver!.disconnect();
+  }
 });
 </script>
 
 <style scoped>
 .roadmap-editor {
   width: 100%;
-  height: 600px;
+  height: 100%;
+  min-width: 200px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   background-color: #fafafa;
+  display: block;
+  position: relative;
+  box-sizing: border-box;
 }
 
 /* Import vis-network styles */
 :deep(.vis-network) {
   outline: none;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+:deep(.vis-network canvas) {
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>
 

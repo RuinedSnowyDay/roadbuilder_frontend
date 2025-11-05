@@ -17,12 +17,15 @@ import { useAuthStore } from './auth';
 
 export const useRoadmapStore = defineStore('roadmap', () => {
   const roadmaps = ref<AssignedObject[]>([]);
+  const sharedRoadmaps = ref<AssignedObject[]>([]);
   const loading = ref(false);
+  const loadingShared = ref(false);
   const error = ref<string | null>(null);
 
   // Current roadmap being viewed
   const currentRoadmap = ref<AssignedObject | null>(null);
   const currentGraphId = ref<string | null>(null);
+  const isSharedRoadmap = ref(false); // True if current roadmap is shared (not owned by current user)
   const nodes = ref<Node[]>([]);
   const edges = ref<Edge[]>([]);
   const loadingRoadmap = ref(false);
@@ -74,6 +77,132 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       roadmaps.value = [];
     } finally {
       loading.value = false;
+    }
+  }
+
+  /**
+   * Shares a roadmap with another user by username
+   * @param username - The username of the user to share with
+   * @returns Error message if failed, null on success
+   */
+  async function shareRoadmap(username: string): Promise<string | null> {
+    if (!currentGraphId.value) {
+      return 'No roadmap loaded';
+    }
+
+    const authStore = useAuthStore();
+    if (!authStore.currentUser) {
+      return 'User not authenticated';
+    }
+
+    try {
+      // Step 1: Look up the user by username
+      const userResponse = await callConceptQuery<{ user: string }>(
+        'UserAuthentication',
+        '_getUserByUsername',
+        { username: username.trim() }
+      );
+
+      if (userResponse.error) {
+        return userResponse.error;
+      }
+
+      if (!userResponse.data || userResponse.data.length === 0) {
+        return 'User not found';
+      }
+
+      const userEntry = userResponse.data[0];
+      if (!userEntry) {
+        return 'User not found';
+      }
+
+      const targetUserId = userEntry.user;
+
+      // Don't allow sharing with yourself
+      if (targetUserId === authStore.currentUser) {
+        return 'Cannot share roadmap with yourself';
+      }
+
+      // Step 2: Share the roadmap (file) with the user
+      // The file ID is the graph/object ID
+      const shareResponse = await callConceptAction<Record<string, never>>(
+        'Sharing',
+        'shareWithUser',
+        {
+          file: currentGraphId.value,
+          user: targetUserId,
+        }
+      );
+
+      if (shareResponse.error) {
+        return shareResponse.error;
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to share roadmap';
+    }
+  }
+
+  /**
+   * Loads all shared roadmaps for the current user
+   */
+  async function loadSharedRoadmaps(): Promise<void> {
+    const authStore = useAuthStore();
+
+    if (!authStore.currentUser) {
+      return;
+    }
+
+    loadingShared.value = true;
+
+    try {
+      // Step 1: Get all file IDs shared with this user
+      const sharedFilesResponse = await callConceptQuery<{ file: string }>(
+        'Sharing',
+        '_getFilesSharedWithUser',
+        { user: authStore.currentUser }
+      );
+
+      if (sharedFilesResponse.error) {
+        console.error('Error loading shared files:', sharedFilesResponse.error);
+        sharedRoadmaps.value = [];
+        return;
+      }
+
+      const sharedFileIds = sharedFilesResponse.data || [];
+
+      // Step 2: For each shared file, get its AssignedObject details
+      // Use _getObjectAssignments to get all AssignedObjects for each object
+      const assignmentPromises = sharedFileIds.map(async (fileEntry) => {
+        try {
+          const assignmentsResponse = await callConceptQuery<AssignedObject>(
+            'ObjectManager',
+            '_getObjectAssignments',
+            { object: fileEntry.file }
+          );
+
+          if (assignmentsResponse.error || !assignmentsResponse.data || assignmentsResponse.data.length === 0) {
+            // No AssignedObject found for this object, skip it
+            return null;
+          }
+
+          // Return the first AssignedObject (there should typically be one)
+          return assignmentsResponse.data[0];
+        } catch (err) {
+          console.error('Error loading assignment for file:', fileEntry.file, err);
+          return null;
+        }
+      });
+
+      const assignments = await Promise.all(assignmentPromises);
+      // Filter out null values and assign to sharedRoadmaps
+      sharedRoadmaps.value = assignments.filter((a): a is AssignedObject => a !== null);
+    } catch (err) {
+      console.error('Error loading shared roadmaps:', err);
+      sharedRoadmaps.value = [];
+    } finally {
+      loadingShared.value = false;
     }
   }
 
@@ -153,17 +282,26 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     error.value = null;
 
     try {
-      // Find the AssignedObject in the list
-      const assignedObject = roadmaps.value.find((r) => r._id === assignedObjectId);
+      // Find the AssignedObject in the user's own roadmaps or shared roadmaps
+      let assignedObject = roadmaps.value.find((r) => r._id === assignedObjectId);
+
+      // If not found in own roadmaps, check shared roadmaps
+      if (!assignedObject) {
+        assignedObject = sharedRoadmaps.value.find((r) => r._id === assignedObjectId);
+      }
 
       if (!assignedObject) {
-        // If not in list, we might need to fetch it
+        // If not in either list, we might need to fetch it
         // For now, return error
         return 'Roadmap not found';
       }
 
       currentRoadmap.value = assignedObject;
       currentGraphId.value = assignedObject.object; // The graph ID
+
+      // Check if this is a shared roadmap (not owned by current user)
+      const authStore = useAuthStore();
+      isSharedRoadmap.value = assignedObject.owner !== authStore.currentUser;
 
       // Load nodes
       const nodesResponse = await callConceptQuery<Node>('EnrichedDAG', '_getGraphNodes', {
@@ -1049,15 +1187,20 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
   return {
     roadmaps,
+    sharedRoadmaps,
     loading,
+    loadingShared,
     error,
     currentRoadmap,
     currentGraphId,
+    isSharedRoadmap,
     nodes,
     edges,
     loadingRoadmap,
     loadRoadmaps,
+    loadSharedRoadmaps,
     createRoadmap,
+    shareRoadmap,
     loadRoadmap,
     addNode,
     updateNodeTitle,

@@ -17,9 +17,19 @@
           <span class="stat-label">Connections:</span>
           <span class="stat-value">{{ edges.length }}</span>
         </div>
+        <div v-if="!isSharedRoadmap" class="stat-item">
+          <button @click="showShareDialog = true" class="share-button" title="Share this roadmap">
+            Share Roadmap
+          </button>
+        </div>
       </div>
           <div class="main-content">
-            <div class="side-toolbar">
+            <!-- Read-only banner for shared roadmaps -->
+            <div v-if="isSharedRoadmap" class="read-only-banner">
+              <p>This roadmap is shared with you. You can view it but cannot make changes.</p>
+            </div>
+            <!-- Toolbar (only shown for non-shared roadmaps) -->
+            <div v-if="!isSharedRoadmap" class="side-toolbar">
               <div class="toolbar-title">Actions</div>
               <button
                 @click="actionMode = 'add'"
@@ -77,9 +87,9 @@
                 <RoadmapEditor
                   :nodes="nodes"
                   :edges="edges"
-                  :delete-mode="actionMode === 'delete'"
-                  :connect-mode="actionMode === 'connect'"
-                  :add-node-mode="actionMode === 'add'"
+                  :delete-mode="!isSharedRoadmap && actionMode === 'delete'"
+                  :connect-mode="!isSharedRoadmap && actionMode === 'connect'"
+                  :add-node-mode="!isSharedRoadmap && actionMode === 'add'"
                   @node-double-click="handleNodeDoubleClick"
                   @node-click="handleNodeClick"
                   @edge-click="handleEdgeClick"
@@ -90,6 +100,49 @@
             </div>
             <NodeContentPanel />
           </div>
+
+      <!-- Share Roadmap Dialog -->
+      <div
+        v-if="showShareDialog"
+        class="dialog-overlay"
+        @click="handleCancelShare"
+      >
+        <div class="dialog-content" @click.stop>
+          <h2>Share Roadmap</h2>
+          <form @submit.prevent="handleShareRoadmap">
+            <div class="form-group">
+              <label for="share-username">Username *</label>
+              <input
+                id="share-username"
+                v-model="shareUsername"
+                type="text"
+                required
+                placeholder="Enter username to share with"
+                :disabled="sharing"
+                autofocus
+              />
+              <p class="form-hint">Enter the username of the user you want to share this roadmap with.</p>
+            </div>
+            <div v-if="shareError" class="error-message">{{ shareError }}</div>
+            <div v-if="shareSuccess" class="success-message">
+              Roadmap shared successfully!
+            </div>
+            <div class="dialog-actions">
+              <button
+                type="button"
+                @click="handleCancelShare"
+                :disabled="sharing"
+                class="cancel-button"
+              >
+                Close
+              </button>
+              <button type="submit" :disabled="sharing" class="submit-button">
+                {{ sharing ? 'Sharing...' : 'Share' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <!-- Add Node Dialog -->
       <div
@@ -244,7 +297,7 @@ import type { Node, Edge } from '../services/types';
 
 const route = useRoute();
 const roadmapStore = useRoadmapStore();
-const { currentRoadmap, nodes, edges, loadingRoadmap } = storeToRefs(roadmapStore);
+const { currentRoadmap, nodes, edges, loadingRoadmap, isSharedRoadmap } = storeToRefs(roadmapStore);
 
 const roadmapError = ref<string | null>(null);
 const actionMode = ref<'add' | 'delete' | 'connect' | 'select'>('select');
@@ -253,6 +306,13 @@ const addingNode = ref(false);
 const addNodeError = ref('');
 const showAddNodeDialog = ref(false);
 const pendingNodePosition = ref<{ x: number; y: number } | null>(null);
+
+// Share dialog state
+const showShareDialog = ref(false);
+const shareUsername = ref('');
+const sharing = ref(false);
+const shareError = ref('');
+const shareSuccess = ref(false);
 
 // Edit node dialog
 const showEditNodeDialog = ref(false);
@@ -346,6 +406,7 @@ function handleCanvasClick(position: { x: number; y: number }) {
 
 function handleNodeDoubleClick(nodeId: string) {
   // Load resources and open the node content modal
+  // For shared roadmaps, this is read-only (NodeContentPanel will handle that)
   roadmapStore.loadNodeResources(nodeId);
 }
 
@@ -508,6 +569,46 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
   }
 }
 
+async function handleShareRoadmap() {
+  if (!shareUsername.value.trim()) {
+    shareError.value = 'Username is required';
+    return;
+  }
+
+  sharing.value = true;
+  shareError.value = '';
+  shareSuccess.value = false;
+
+  try {
+    const error = await roadmapStore.shareRoadmap(shareUsername.value.trim());
+    if (error) {
+      shareError.value = error;
+      shareSuccess.value = false;
+    } else {
+      // Success
+      shareSuccess.value = true;
+      shareError.value = '';
+      // Clear the form after a short delay
+      setTimeout(() => {
+        shareUsername.value = '';
+        shareSuccess.value = false;
+      }, 2000);
+    }
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : 'Failed to share roadmap';
+    shareSuccess.value = false;
+  } finally {
+    sharing.value = false;
+  }
+}
+
+function handleCancelShare() {
+  showShareDialog.value = false;
+  shareUsername.value = '';
+  shareError.value = '';
+  shareSuccess.value = false;
+}
+
 </script>
 
 <style scoped>
@@ -515,6 +616,8 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .back-link {
@@ -539,6 +642,11 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
 
 .error {
   color: #f44336;
+}
+
+.roadmap-info {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .roadmap-info h1 {
@@ -567,6 +675,7 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  align-items: flex-start;
 }
 
 .stat-label {
@@ -594,6 +703,8 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
   gap: 1.5rem;
   margin-top: 1.5rem;
   align-items: flex-start;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .side-toolbar {
@@ -676,12 +787,24 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
 }
 
 .graph-area {
-  flex: 1;
-  min-width: 0; /* Allows flex item to shrink below content size */
+  flex: 1 1 0;
+  min-width: 400px; /* Minimum width to prevent collapse */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent content from overflowing */
 }
 
 .graph-container {
   margin-top: 0;
+  width: 100%;
+  height: 600px;
+  min-width: 200px;
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 /* Dialog Styles */
@@ -741,6 +864,20 @@ async function handleEdgeCreated(sourceNodeId: string, targetNodeId: string) {
 .form-group input:disabled {
   background-color: #f5f5f5;
   cursor: not-allowed;
+}
+
+.form-hint {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
+}
+
+.success-message {
+  color: #4caf50;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .error-message {

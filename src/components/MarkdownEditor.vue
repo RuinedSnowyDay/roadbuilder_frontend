@@ -2,23 +2,31 @@
   <div class="markdown-editor">
     <div class="editor-header">
       <h3>{{ resourceTitle }}</h3>
-      <div class="editor-actions">
-        <button
-          @click="handleSave"
-          :disabled="saving || (!hasChanges && !saved)"
-          class="save-button"
-          :class="{ 'saved': saved && !hasChanges }"
-        >
-          {{ saving ? 'Saving...' : saved && !hasChanges ? 'Saved' : 'Save' }}
-        </button>
-        <button
-          @click="handleCancel"
-          :disabled="saving"
-          class="cancel-button"
-        >
-          Close
-        </button>
-      </div>
+    <div v-if="!readOnly" class="editor-actions">
+      <button
+        @click="handleSave"
+        :disabled="saving || (!hasChanges && !saved)"
+        class="save-button"
+        :class="{ 'saved': saved && !hasChanges }"
+      >
+        {{ saving ? 'Saving...' : saved && !hasChanges ? 'Saved' : 'Save' }}
+      </button>
+      <button
+        @click="handleCancel"
+        :disabled="saving"
+        class="cancel-button"
+      >
+        Close
+      </button>
+    </div>
+    <div v-else class="editor-actions">
+      <button
+        @click="handleCancel"
+        class="cancel-button"
+      >
+        Close
+      </button>
+    </div>
     </div>
     <div class="editor-content">
       <EditorContent :editor="editor" />
@@ -32,11 +40,14 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   resourceId: string;
   resourceTitle: string;
   initialContent?: string;
-}>();
+  readOnly?: boolean;
+}>(), {
+  readOnly: false,
+});
 
 const emit = defineEmits<{
   save: [content: string];
@@ -51,6 +62,7 @@ const saved = ref(false);
 const editor = useEditor({
   extensions: [StarterKit],
   content: props.initialContent || '',
+  editable: !props.readOnly,
   editorProps: {
     attributes: {
       class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none',
@@ -70,6 +82,16 @@ watch(
       editor.value.commands.setContent(newContent || '');
       hasChanges.value = false;
       saved.value = false; // Reset saved state when content changes externally
+    }
+  }
+);
+
+// Watch for readOnly changes
+watch(
+  () => props.readOnly,
+  (readOnly) => {
+    if (editor.value) {
+      editor.value.setEditable(!readOnly);
     }
   }
 );
