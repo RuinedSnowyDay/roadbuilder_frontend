@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { callConceptAction } from '../services/api';
-import type { User, Session } from '../services/types';
+import { callConceptAction, callConceptQuery } from '../services/api';
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<string | null>(null);
@@ -17,8 +16,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function login(username: string, password: string): Promise<string | null> {
     try {
-      // First, try to login
-      const loginResponse = await callConceptAction<User>(
+      // Login now returns session directly (session is created automatically via syncs)
+      const loginResponse = await callConceptAction<{ session: string }>(
         'UserAuthentication',
         'login',
         { username, password }
@@ -28,28 +27,27 @@ export const useAuthStore = defineStore('auth', () => {
         return loginResponse.error;
       }
 
-      if (!loginResponse.data?.user) {
-        return 'Login failed: No user returned';
+      if (!loginResponse.data?.session) {
+        return 'Login failed: No session returned';
       }
 
-      const userId = loginResponse.data.user;
+      const sessionId = loginResponse.data.session;
 
-      // Create a session
-      const sessionResponse = await callConceptAction<Session>(
+      // Get the user from the session
+      const userResponse = await callConceptQuery<{ user: string }>(
         'Sessioning',
-        'create',
-        { user: userId }
+        '_getUser',
+        { session: sessionId }
       );
 
-      if (sessionResponse.error) {
-        return sessionResponse.error;
+      if (userResponse.error || !userResponse.data || userResponse.data.length === 0) {
+        return 'Failed to get user from session';
       }
 
-      if (!sessionResponse.data?.session) {
-        return 'Session creation failed';
+      const userId = userResponse.data[0]?.user;
+      if (!userId) {
+        return 'Failed to get user from session';
       }
-
-      const sessionId = sessionResponse.data.session;
 
       // Store session and user
       currentUser.value = userId;
@@ -65,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(username: string, password: string): Promise<string | null> {
     try {
-      const response = await callConceptAction<User>(
+      const response = await callConceptAction<{ user: string }>(
         'UserAuthentication',
         'register',
         { username, password }
@@ -89,6 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     if (currentSession.value) {
       try {
+        // Logout now goes through Requesting concept
         await callConceptAction('Sessioning', 'delete', {
           session: currentSession.value,
         });

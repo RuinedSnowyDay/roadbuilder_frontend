@@ -94,6 +94,25 @@ export async function callConceptQuery<T>(
   query: string,
   body: Record<string, unknown>
 ): Promise<ApiResponse<T[]>> {
-  return apiRequest<T[]>(`/api/${concept}/${query}`, body);
+  const response = await apiRequest<{ results?: T[] } | T[]>(`/api/${concept}/${query}`, body);
+  
+  // Handle responses that come through Requesting concept (wrapped in results)
+  if (response.data) {
+    if (Array.isArray(response.data)) {
+      // Direct passthrough response (array)
+      return { data: response.data };
+    } else if ('results' in response.data) {
+      // Response wrapped in results field (via Requesting)
+      const results = response.data.results;
+      if (Array.isArray(results)) {
+        return { data: results };
+      } else if (results && typeof results === 'object' && 'error' in results) {
+        // Error in results field
+        return { error: (results as { error: string }).error };
+      }
+    }
+  }
+  
+  return response as ApiResponse<T[]>;
 }
 

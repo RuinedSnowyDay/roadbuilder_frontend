@@ -52,7 +52,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   async function loadRoadmaps(): Promise<void> {
     const authStore = useAuthStore();
 
-    if (!authStore.currentUser) {
+    if (!authStore.currentUser || !authStore.currentSession) {
       error.value = 'User not authenticated';
       return;
     }
@@ -64,7 +64,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const response = await callConceptQuery<AssignedObject>(
         'ObjectManager',
         '_getUserAssignedObjects',
-        { owner: authStore.currentUser }
+        { session: authStore.currentSession }
       );
 
       if (response.error) {
@@ -88,7 +88,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
    */
   async function deleteRoadmap(roadmapId: string): Promise<string | null> {
     const authStore = useAuthStore();
-    if (!authStore.currentUser) {
+    if (!authStore.currentUser || !authStore.currentSession) {
       return 'User not authenticated';
     }
 
@@ -109,6 +109,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'EnrichedDAG',
         'deleteGraph',
         {
+          session: authStore.currentSession,
           graph: roadmap.object,
         }
       );
@@ -122,7 +123,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'ObjectManager',
         'deleteAssignedObject',
         {
-          owner: authStore.currentUser,
+          session: authStore.currentSession,
           title: roadmap.title,
         }
       );
@@ -199,6 +200,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'Sharing',
         'shareWithUser',
         {
+          session: authStore.currentSession!,
           file: currentGraphId.value,
           user: targetUserId,
         }
@@ -220,7 +222,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   async function loadSharedRoadmaps(): Promise<void> {
     const authStore = useAuthStore();
 
-    if (!authStore.currentUser) {
+    if (!authStore.currentUser || !authStore.currentSession) {
       return;
     }
 
@@ -231,7 +233,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const sharedFilesResponse = await callConceptQuery<{ file: string }>(
         'Sharing',
         '_getFilesSharedWithUser',
-        { user: authStore.currentUser }
+        { session: authStore.currentSession }
       );
 
       if (sharedFilesResponse.error) {
@@ -249,7 +251,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           const assignmentsResponse = await callConceptQuery<AssignedObject>(
             'ObjectManager',
             '_getObjectAssignments',
-            { object: fileEntry.file }
+            { session: authStore.currentSession!, object: fileEntry.file }
           );
 
           if (assignmentsResponse.error || !assignmentsResponse.data || assignmentsResponse.data.length === 0) {
@@ -326,7 +328,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   ): Promise<string | null> {
     const authStore = useAuthStore();
 
-    if (!authStore.currentUser) {
+    if (!authStore.currentUser || !authStore.currentSession) {
       return 'User not authenticated';
     }
 
@@ -336,7 +338,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'EnrichedDAG',
         'createEmptyGraph',
         {
-          owner: authStore.currentUser,
+          session: authStore.currentSession,
           graphTitle: title,
         }
       );
@@ -357,7 +359,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           'ObjectManager',
           'createAssignedObject',
           {
-            owner: authStore.currentUser,
+            session: authStore.currentSession,
             object: graphId,
             title: title,
             description: description,
@@ -413,6 +415,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
       // Load nodes
       const nodesResponse = await callConceptQuery<Node>('EnrichedDAG', '_getGraphNodes', {
+        session: authStore.currentSession!,
         graph: assignedObject.object,
       });
 
@@ -430,6 +433,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
             'ResourceList',
             '_getListResources',
             {
+              session: authStore.currentSession!,
               resourceList: node.enrichment,
             }
           );
@@ -456,6 +460,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
       // Load edges
       const edgesResponse = await callConceptQuery<Edge>('EnrichedDAG', '_getGraphEdges', {
+        session: authStore.currentSession!,
         graph: assignedObject.object,
       });
 
@@ -508,7 +513,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'ResourceList',
         'createResourceList',
         {
-          owner: authStore.currentUser,
+          session: authStore.currentSession!,
           listTitle: resourceListTitle,
         }
       );
@@ -528,6 +533,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'EnrichedDAG',
         'addNode',
         {
+          session: authStore.currentSession!,
           graph: currentGraphId.value,
           nodeTitle: nodeTitle,
           enrichment: enrichmentId,
@@ -590,8 +596,14 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       return 'A node with this title already exists';
     }
 
+    const authStore = useAuthStore();
+    if (!authStore.currentSession) {
+      return 'User not authenticated';
+    }
+
     try {
       const response = await callConceptAction('EnrichedDAG', 'changeNodeTitle', {
+        session: authStore.currentSession,
         graph: currentGraphId.value,
         node: nodeId,
         newNodeTitle: newTitle.trim(),
@@ -631,7 +643,13 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     try {
       // Call the backend API to remove the node
       // According to API spec: POST /api/EnrichedDAG/removeNode with body { "node": "ID" }
+      const authStore = useAuthStore();
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const response = await callConceptAction<Record<string, never>>('EnrichedDAG', 'removeNode', {
+        session: authStore.currentSession,
         node: nodeId,
       });
 
@@ -652,6 +670,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           'ResourceList',
           'deleteResourceList',
           {
+            session: authStore.currentSession!,
             resourceList: node.enrichment,
           }
         );
@@ -719,6 +738,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'EnrichedDAG',
         'addEdge',
         {
+          session: authStore.currentSession!,
           graph: currentGraphId.value,
           sourceNode: sourceNodeId,
           targetNode: targetNodeId,
@@ -755,8 +775,14 @@ export const useRoadmapStore = defineStore('roadmap', () => {
    * @returns Error message or null on success
    */
   async function deleteEdge(edgeId: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    if (!authStore.currentSession) {
+      return 'User not authenticated';
+    }
+
     try {
       const response = await callConceptAction('EnrichedDAG', 'removeEdge', {
+        session: authStore.currentSession,
         edge: edgeId,
       });
 
@@ -793,10 +819,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const resourceListId = node.enrichment;
 
       // Get all resources in the list
+      const authStore = useAuthStore();
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const response = await callConceptQuery<IndexedResource>(
         'ResourceList',
         '_getListResources',
         {
+          session: authStore.currentSession,
           resourceList: resourceListId,
         }
       );
@@ -856,10 +888,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       // The backend should handle creating the object if needed
       const resourceId = `resource-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+      const authStore = useAuthStore();
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const response = await callConceptAction<{ newIndexedResource: string }>(
         'ResourceList',
         'appendResource',
         {
+          session: authStore.currentSession,
           resourceList: resourceListId,
           resource: resourceId,
           resourceTitle: resourceTitle.trim(),
@@ -892,10 +930,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     const resourceListId = selectedNode.value.enrichment;
 
     try {
+      const authStore = useAuthStore();
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const response = await callConceptAction<Record<string, never>>(
         'ResourceList',
         'deleteResource',
         {
+          session: authStore.currentSession,
           resourceList: resourceListId,
           index: index,
         }
@@ -951,10 +995,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     nodeResources.value = updatedResources;
 
     try {
+      const authStore = useAuthStore();
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const response = await callConceptAction<Record<string, never>>(
         'ResourceList',
         'moveResource',
         {
+          session: authStore.currentSession,
           resourceList: resourceListId,
           oldIndex: fromIndex,
           newIndex: toIndex,
@@ -997,11 +1047,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
 
     try {
       // Get check for this user and resource object
+      if (!authStore.currentSession) {
+        console.error('loadResourceCheck: No session');
+        return null;
+      }
+
       const checkResponse = await callConceptQuery<{ _id: string; user: string; object: string; checked: boolean }>(
         'ObjectChecker',
         '_getCheck',
         {
-          user: userId,
+          session: authStore.currentSession,
           object: resourceId,
         }
       );
@@ -1020,7 +1075,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           'ObjectChecker',
           'createCheck',
           {
-            user: userId,
+            session: authStore.currentSession!,
             object: resourceId,
           }
         );
@@ -1084,11 +1139,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const newCheckedState = !check.checked;
 
       // Update check state
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       const action = newCheckedState ? 'markObject' : 'unmarkObject';
       const response = await callConceptAction<Record<string, never>>(
         'ObjectChecker',
         action,
         {
+          session: authStore.currentSession,
           check: check._id,
         }
       );
@@ -1131,11 +1191,15 @@ export const useRoadmapStore = defineStore('roadmap', () => {
       const filename = `resource-${resourceId}.md`;
 
       // Get all files for the user
+      if (!authStore.currentSession) {
+        return null;
+      }
+
       const filesResponse = await callConceptQuery<{ file: string; filename: string }>(
         'FileUploading',
         '_getFilesByOwner',
         {
-          owner: userId,
+          session: authStore.currentSession,
         }
       );
 
@@ -1157,6 +1221,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'FileUploading',
         '_getDownloadURL',
         {
+          session: authStore.currentSession!,
           file: resourceFile.file,
         }
       );
@@ -1202,12 +1267,16 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     try {
       const filename = `resource-${resourceId}.md`;
 
+      if (!authStore.currentSession) {
+        return 'User not authenticated';
+      }
+
       // Check if file already exists
       const filesResponse = await callConceptQuery<{ file: string; filename: string }>(
         'FileUploading',
         '_getFilesByOwner',
         {
-          owner: userId,
+          session: authStore.currentSession,
         }
       );
 
@@ -1219,6 +1288,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           fileId = existingFile.file;
           // Delete existing file
           await callConceptAction<Record<string, never>>('FileUploading', 'delete', {
+            session: authStore.currentSession!,
             file: fileId,
           });
         }
@@ -1229,7 +1299,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'FileUploading',
         'requestUploadURL',
         {
-          owner: userId,
+          session: authStore.currentSession,
           filename: filename,
         }
       );
@@ -1276,6 +1346,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         'FileUploading',
         'confirmUpload',
         {
+          session: authStore.currentSession!,
           file: fileId,
         }
       );
