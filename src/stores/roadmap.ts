@@ -1195,6 +1195,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return null;
       }
 
+      // First, check files owned by the user
       const filesResponse = await callConceptQuery<{ file: string; filename: string }>(
         'FileUploading',
         '_getFilesByOwner',
@@ -1203,12 +1204,49 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         }
       );
 
-      if (filesResponse.error) {
-        return null;
+      let resourceFile: { file: string; filename: string } | undefined = undefined;
+
+      if (!filesResponse.error && filesResponse.data) {
+        // Find file with matching filename in owned files
+        resourceFile = filesResponse.data.find((f) => f.filename === filename);
       }
 
-      // Find file with matching filename
-      const resourceFile = filesResponse.data?.find((f) => f.filename === filename);
+      // If not found and we're viewing a shared roadmap, also check shared files
+      if (!resourceFile && isSharedRoadmap.value) {
+        const sharedFilesResponse = await callConceptQuery<{ file: string }>(
+          'Sharing',
+          '_getFilesSharedWithUser',
+          {
+            session: authStore.currentSession,
+          }
+        );
+
+        if (!sharedFilesResponse.error && sharedFilesResponse.data) {
+          // Get filenames for all shared files in parallel
+          const filenamePromises = sharedFilesResponse.data.map(async (sharedFile) => {
+            const filenameResponse = await callConceptQuery<{ filename: string }>(
+              'FileUploading',
+              '_getFilename',
+              {
+                session: authStore.currentSession!,
+                file: sharedFile.file,
+              }
+            );
+
+            if (!filenameResponse.error && filenameResponse.data && filenameResponse.data.length > 0) {
+              const fileFilename = filenameResponse.data[0]?.filename;
+              if (fileFilename) {
+                return { file: sharedFile.file, filename: fileFilename };
+              }
+            }
+            return null;
+          });
+
+          const fileInfos = await Promise.all(filenamePromises);
+          const matchingFile = fileInfos.find((info) => info !== null && info.filename === filename);
+          resourceFile = matchingFile || undefined;
+        }
+      }
 
       if (!resourceFile) {
         // No content file exists yet
