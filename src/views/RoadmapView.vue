@@ -4,8 +4,63 @@
     <div v-if="loadingRoadmap" class="loading">Loading roadmap...</div>
     <div v-else-if="roadmapError" class="error">Error: {{ roadmapError }}</div>
     <div v-else-if="currentRoadmap" class="roadmap-info">
-      <h1>Roadmap: {{ currentRoadmap.title }}</h1>
-      <p v-if="currentRoadmap.description" class="description">
+      <div class="roadmap-header">
+        <div v-if="!editingRoadmap" class="roadmap-title-section">
+          <h1>Roadmap: {{ currentRoadmap.title }}</h1>
+          <button
+            v-if="!isSharedRoadmap"
+            @click="startEditingRoadmap"
+            class="edit-roadmap-button"
+            title="Edit roadmap title and description"
+          >
+            ✏️
+          </button>
+        </div>
+        <div v-else class="roadmap-edit-section">
+          <form @submit.prevent="handleSaveRoadmap" class="roadmap-edit-form">
+            <div class="form-group">
+              <label for="roadmap-title-input">Title:</label>
+              <input
+                id="roadmap-title-input"
+                v-model="editingRoadmapTitle"
+                type="text"
+                required
+                placeholder="Enter roadmap title"
+                :disabled="savingRoadmap"
+                :class="{ 'error': hasDuplicateTitleError }"
+                autofocus
+              />
+              <div v-if="hasDuplicateTitleError" class="error-message">
+                A roadmap with this title already exists.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="roadmap-description-input">Description:</label>
+              <textarea
+                id="roadmap-description-input"
+                v-model="editingRoadmapDescription"
+                placeholder="Enter roadmap description (optional)"
+                :disabled="savingRoadmap"
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button
+                type="button"
+                @click="cancelEditingRoadmap"
+                :disabled="savingRoadmap"
+                class="cancel-button"
+              >
+                Cancel
+              </button>
+              <button type="submit" :disabled="savingRoadmap" class="submit-button">
+                {{ savingRoadmap ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <p v-if="!editingRoadmap && currentRoadmap.description" class="description">
         {{ currentRoadmap.description }}
       </p>
           <div class="main-content">
@@ -299,7 +354,7 @@ import type { Node, Edge } from '../services/types';
 
 const route = useRoute();
 const roadmapStore = useRoadmapStore();
-const { currentRoadmap, nodes, edges, loadingRoadmap, isSharedRoadmap } = storeToRefs(roadmapStore);
+const { currentRoadmap, nodes, edges, loadingRoadmap, isSharedRoadmap, roadmaps } = storeToRefs(roadmapStore);
 
 const roadmapError = ref<string | null>(null);
 const actionMode = ref<'add' | 'delete' | 'connect' | 'select'>('select');
@@ -339,6 +394,14 @@ const deletingEdge = ref(false);
 // Edge creation
 const addingEdge = ref(false);
 const edgeError = ref('');
+
+// Roadmap editing state
+const editingRoadmap = ref(false);
+const editingRoadmapTitle = ref('');
+const editingRoadmapDescription = ref('');
+const originalRoadmapTitle = ref('');
+const savingRoadmap = ref(false);
+const hasDuplicateTitleError = ref(false);
 
 onMounted(async () => {
   const roadmapId = route.params.id as string;
@@ -608,6 +671,93 @@ function handleCancelShare() {
   shareSuccess.value = false;
 }
 
+// Roadmap editing functions
+function startEditingRoadmap() {
+  if (!currentRoadmap.value) return;
+  editingRoadmap.value = true;
+  editingRoadmapTitle.value = currentRoadmap.value.title;
+  editingRoadmapDescription.value = currentRoadmap.value.description || '';
+  originalRoadmapTitle.value = currentRoadmap.value.title;
+  hasDuplicateTitleError.value = false;
+}
+
+function cancelEditingRoadmap() {
+  editingRoadmap.value = false;
+  editingRoadmapTitle.value = '';
+  editingRoadmapDescription.value = '';
+  originalRoadmapTitle.value = '';
+  hasDuplicateTitleError.value = false;
+}
+
+function checkDuplicateTitle(title: string): boolean {
+  if (!currentRoadmap.value) return false;
+  const trimmedTitle = title.trim();
+  // Check if any other roadmap has this title (excluding the current one by ID)
+  return roadmaps.value.some(
+    (r) => r.title === trimmedTitle && r._id !== currentRoadmap.value!._id
+  );
+}
+
+async function handleSaveRoadmap() {
+  if (!currentRoadmap.value) return;
+
+  const newTitle = editingRoadmapTitle.value.trim();
+  const newDescription = editingRoadmapDescription.value.trim();
+
+  if (!newTitle) {
+    hasDuplicateTitleError.value = true;
+    return;
+  }
+
+  // Check for duplicate title
+  if (checkDuplicateTitle(newTitle)) {
+    hasDuplicateTitleError.value = true;
+    return;
+  }
+
+  hasDuplicateTitleError.value = false;
+  savingRoadmap.value = true;
+
+  try {
+    // Update title if it changed
+    if (newTitle !== originalRoadmapTitle.value) {
+      const titleError = await roadmapStore.updateRoadmapTitle(originalRoadmapTitle.value, newTitle);
+      if (titleError) {
+        if (titleError.includes('already exists') || titleError.includes('duplicate')) {
+          hasDuplicateTitleError.value = true;
+        } else {
+          alert(`Failed to update roadmap title: ${titleError}`);
+        }
+        savingRoadmap.value = false;
+        return;
+      }
+    }
+
+    // Update description (always update, even if same, to handle empty strings)
+    // Use the current title (which may have been updated) for the description update
+    const titleForDescription = newTitle !== originalRoadmapTitle.value ? newTitle : originalRoadmapTitle.value;
+    const descriptionError = await roadmapStore.updateRoadmapDescription(
+      titleForDescription,
+      newDescription
+    );
+    if (descriptionError) {
+      alert(`Failed to update roadmap description: ${descriptionError}`);
+      savingRoadmap.value = false;
+      return;
+    }
+
+    // Success - exit edit mode
+    editingRoadmap.value = false;
+    editingRoadmapTitle.value = '';
+    editingRoadmapDescription.value = '';
+    originalRoadmapTitle.value = '';
+  } catch (err) {
+    alert(`Failed to update roadmap: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  } finally {
+    savingRoadmap.value = false;
+  }
+}
+
 </script>
 
 <style scoped>
@@ -657,11 +807,139 @@ function handleCancelShare() {
   margin-bottom: 1rem;
 }
 
+.roadmap-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.roadmap-title-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .roadmap-info h1 {
   margin-top: 0;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0;
   color: var(--color-heading);
   font-size: 1.5rem;
+  flex: 1;
+}
+
+.edit-roadmap-button {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-roadmap-button:hover {
+  background-color: var(--gunmetal-bg);
+}
+
+.roadmap-edit-section {
+  width: 100%;
+}
+
+.roadmap-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: var(--color-heading);
+  font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+  background-color: var(--gunmetal-bg);
+  color: var(--color-text);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.form-group input.error {
+  border-color: #ff6b6b;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.error-message {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+}
+
+.cancel-button,
+.submit-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.cancel-button {
+  background-color: var(--gunmetal-bg);
+  color: var(--color-text);
+}
+
+.cancel-button:hover:not(:disabled) {
+  background-color: var(--color-border);
+}
+
+.submit-button {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.submit-button:hover:not(:disabled) {
+  background-color: var(--color-accent-hover);
+}
+
+.cancel-button:disabled,
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .description {

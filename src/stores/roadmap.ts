@@ -153,6 +153,109 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   }
 
   /**
+   * Updates the title of a roadmap
+   * @param oldTitle - The current title of the roadmap
+   * @param newTitle - The new title for the roadmap
+   * @returns Error message if failed, null on success
+   */
+  async function updateRoadmapTitle(oldTitle: string, newTitle: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    if (!authStore.currentUser || !authStore.currentSession) {
+      return 'User not authenticated';
+    }
+
+    if (!newTitle.trim()) {
+      return 'Title cannot be empty';
+    }
+
+    // Check for duplicate title (excluding the current roadmap)
+    const trimmedNewTitle = newTitle.trim();
+    // Find the roadmap being updated to exclude it from duplicate check
+    const roadmapBeingUpdated = roadmaps.value.find((r) => r.title === oldTitle);
+    const duplicateRoadmap = roadmaps.value.find(
+      (r) => r.title === trimmedNewTitle && (roadmapBeingUpdated ? r._id !== roadmapBeingUpdated._id : true)
+    );
+    if (duplicateRoadmap) {
+      return 'A roadmap with this title already exists';
+    }
+
+    try {
+      const response = await callConceptAction<Record<string, never>>(
+        'ObjectManager',
+        'changeAssignedObjectTitle',
+        {
+          session: authStore.currentSession,
+          oldTitle: oldTitle,
+          newTitle: trimmedNewTitle,
+        }
+      );
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Update local state
+      const roadmap = roadmaps.value.find((r) => r.title === oldTitle);
+      if (roadmap) {
+        roadmap.title = trimmedNewTitle;
+      }
+
+      // Update current roadmap if it's the one being edited
+      if (currentRoadmap.value && currentRoadmap.value.title === oldTitle) {
+        currentRoadmap.value.title = trimmedNewTitle;
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to update roadmap title';
+    }
+  }
+
+  /**
+   * Updates the description of a roadmap
+   * @param title - The title of the roadmap
+   * @param newDescription - The new description for the roadmap
+   * @returns Error message if failed, null on success
+   */
+  async function updateRoadmapDescription(title: string, newDescription: string): Promise<string | null> {
+    const authStore = useAuthStore();
+    if (!authStore.currentUser || !authStore.currentSession) {
+      return 'User not authenticated';
+    }
+
+    try {
+      const response = await callConceptAction<Record<string, never>>(
+        'ObjectManager',
+        'changeAssignedObjectDescription',
+        {
+          session: authStore.currentSession,
+          title: title,
+          newDescription: newDescription.trim(),
+        }
+      );
+
+      if (response.error) {
+        return response.error;
+      }
+
+      // Update local state
+      const roadmap = roadmaps.value.find((r) => r.title === title);
+      if (roadmap) {
+        roadmap.description = newDescription.trim();
+      }
+
+      // Update current roadmap if it's the one being edited
+      if (currentRoadmap.value && currentRoadmap.value.title === title) {
+        currentRoadmap.value.description = newDescription.trim();
+      }
+
+      return null; // Success
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Failed to update roadmap description';
+    }
+  }
+
+  /**
    * Shares a roadmap with another user by username
    * @param username - The username of the user to share with
    * @returns Error message if failed, null on success
@@ -1433,6 +1536,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     createRoadmap,
     deleteRoadmap,
     shareRoadmap,
+    updateRoadmapTitle,
+    updateRoadmapDescription,
     loadRoadmap,
     addNode,
     updateNodeTitle,
