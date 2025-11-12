@@ -184,11 +184,21 @@ const editingResource = ref<IndexedResource | null>(null);
 const editingResourceContent = ref<string>('');
 
 // Watch for selectedNode changes to initialize title editing
-watch(selectedNode, (newNode) => {
+watch(selectedNode, (newNode, oldNode) => {
+  // Clear resource editor when switching nodes
+  if (oldNode && newNode && oldNode._id !== newNode._id) {
+    editingResource.value = null;
+    editingResourceContent.value = '';
+  }
+  
   if (newNode) {
     editingTitle.value = newNode.title;
     originalTitle.value = newNode.title;
     hasDuplicateError.value = false;
+  } else {
+    // Node was closed, clear everything
+    editingResource.value = null;
+    editingResourceContent.value = '';
   }
 }, { immediate: true });
 
