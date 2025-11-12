@@ -1,6 +1,6 @@
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export interface ApiError {
   error: string;
@@ -95,7 +95,7 @@ export async function callConceptQuery<T>(
   body: Record<string, unknown>
 ): Promise<ApiResponse<T[]>> {
   const response = await apiRequest<{ results?: T[] } | T[]>(`/api/${concept}/${query}`, body);
-  
+
   // Handle responses that come through Requesting concept (wrapped in results)
   if (response.data) {
     if (Array.isArray(response.data)) {
@@ -112,7 +112,7 @@ export async function callConceptQuery<T>(
       }
     }
   }
-  
+
   return response as ApiResponse<T[]>;
 }
 
