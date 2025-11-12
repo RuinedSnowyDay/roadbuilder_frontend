@@ -7,6 +7,7 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Network } from 'vis-network';
 import { DataSet } from 'vis-data';
 import { useRoadmapStore } from '../stores/roadmap';
+import { useAuthStore } from '../stores/auth';
 import { storeToRefs } from 'pinia';
 import type { Node, Edge } from '../services/types';
 
@@ -73,12 +74,18 @@ function calculateNodeProgress(nodeId: string): number {
     return 0; // No resources means 0% progress
   }
 
-  // Count checked resources
+  // Count checked resources (user-specific)
+  const authStore = useAuthStore();
+  const userId = authStore.currentUser;
   let checkedCount = 0;
-  for (const resource of resources) {
-    const check = resourceChecks.value.get(resource.resource);
-    if (check?.checked) {
-      checkedCount++;
+  if (userId) {
+    for (const resource of resources) {
+      // Use composite key to ensure checks are user-specific
+      const cacheKey = `${userId}-${resource.resource}`;
+      const check = resourceChecks.value.get(cacheKey);
+      if (check?.checked) {
+        checkedCount++;
+      }
     }
   }
 

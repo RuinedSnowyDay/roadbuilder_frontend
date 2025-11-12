@@ -100,6 +100,11 @@ export const useAuthStore = defineStore('auth', () => {
     currentSession.value = null;
     localStorage.removeItem('user');
     localStorage.removeItem('session');
+
+    // Clear resource checks cache when user logs out
+    const { useRoadmapStore } = await import('./roadmap');
+    const roadmapStore = useRoadmapStore();
+    roadmapStore.clearResourceChecks();
   }
 
   function isAuthenticated(): boolean {

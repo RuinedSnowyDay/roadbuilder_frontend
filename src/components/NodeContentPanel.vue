@@ -154,6 +154,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useRoadmapStore } from '../stores/roadmap';
+import { useAuthStore } from '../stores/auth';
 import { storeToRefs } from 'pinia';
 import MarkdownEditor from './MarkdownEditor.vue';
 import type { IndexedResource } from '../services/types';
@@ -393,12 +394,24 @@ async function handleDrop(event: DragEvent, toIndex: number) {
 
 // Resource check management
 function isResourceChecked(resourceId: string): boolean {
-  const check = resourceChecks.value.get(resourceId);
+  const authStore = useAuthStore();
+  const userId = authStore.currentUser;
+  if (!userId) return false;
+  
+  // Use composite key to ensure checks are user-specific
+  const cacheKey = `${userId}-${resourceId}`;
+  const check = resourceChecks.value.get(cacheKey);
   return check?.checked || false;
 }
 
 async function loadResourceCheckIfNeeded(resourceId: string) {
-  if (!resourceChecks.value.has(resourceId)) {
+  const authStore = useAuthStore();
+  const userId = authStore.currentUser;
+  if (!userId) return;
+  
+  // Use composite key to ensure checks are user-specific
+  const cacheKey = `${userId}-${resourceId}`;
+  if (!resourceChecks.value.has(cacheKey)) {
     await roadmapStore.loadResourceCheck(resourceId);
   }
 }

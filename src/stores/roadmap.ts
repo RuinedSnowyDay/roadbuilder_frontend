@@ -39,7 +39,8 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   // Resource content cache (resourceId -> content)
   const resourceContentCache = ref<Map<string, string>>(new Map());
 
-  // Resource checks cache (resourceId -> Check)
+  // Resource checks cache (userId-resourceId -> Check)
+  // Using composite key to ensure checks are user-specific
   const resourceChecks = ref<Map<string, { _id: string; checked: boolean }>>(new Map());
 
   // All resources cache (ResourceList ID -> IndexedResource[])
@@ -869,6 +870,14 @@ export const useRoadmapStore = defineStore('roadmap', () => {
   }
 
   /**
+   * Clears the resource checks cache
+   * Should be called when user logs out to free memory
+   */
+  function clearResourceChecks(): void {
+    resourceChecks.value.clear();
+  }
+
+  /**
    * Adds a resource to the selected node
    * @param resourceTitle - Title for the new resource
    * @returns Error message or null on success
@@ -1032,17 +1041,20 @@ export const useRoadmapStore = defineStore('roadmap', () => {
    * @returns Check object or null if not found/error
    */
   async function loadResourceCheck(resourceId: string): Promise<{ _id: string; checked: boolean } | null> {
-    // Check cache first
-    if (resourceChecks.value.has(resourceId)) {
-      return resourceChecks.value.get(resourceId) || null;
-    }
-
     const authStore = useAuthStore();
     const userId = authStore.currentUser;
 
     if (!userId) {
       console.error('loadResourceCheck: No user ID');
       return null;
+    }
+
+    // Use composite key to ensure checks are user-specific
+    const cacheKey = `${userId}-${resourceId}`;
+
+    // Check cache first
+    if (resourceChecks.value.has(cacheKey)) {
+      return resourceChecks.value.get(cacheKey) || null;
     }
 
     try {
@@ -1095,7 +1107,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
           _id: createResponse.data.newCheck,
           checked: false,
         };
-        resourceChecks.value.set(resourceId, newCheck);
+        resourceChecks.value.set(cacheKey, newCheck);
         return newCheck;
       }
 
@@ -1108,7 +1120,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         _id: check._id,
         checked: check.checked,
       };
-      resourceChecks.value.set(resourceId, checkData);
+      resourceChecks.value.set(cacheKey, checkData);
       return checkData;
     } catch (err) {
       console.error('loadResourceCheck: Exception:', err);
@@ -1157,9 +1169,10 @@ export const useRoadmapStore = defineStore('roadmap', () => {
         return response.error;
       }
 
-      // Update cache
+      // Update cache with user-specific key
+      const cacheKey = `${userId}-${resourceId}`;
       check.checked = newCheckedState;
-      resourceChecks.value.set(resourceId, check);
+      resourceChecks.value.set(cacheKey, check);
 
       // Recalculate progress for all nodes (will be done when nodes are reloaded)
       return null; // Success
@@ -1431,6 +1444,7 @@ export const useRoadmapStore = defineStore('roadmap', () => {
     loadingResources,
     loadNodeResources,
     clearSelectedNode,
+    clearResourceChecks,
     addResource,
     removeResource,
     reorderResource,
